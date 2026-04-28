@@ -1,0 +1,10 @@
+backend/
+data/
+frontend/
+*.py
+*.bat
+*.sh
+.env
+.env.example
+requirements.txt
+test_pipeline.py

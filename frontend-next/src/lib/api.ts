@@ -1,16 +1,48 @@
 import axios from "axios";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const SECRET   = process.env.NEXT_PUBLIC_API_SECRET || "";
+// ── Resolução da URL e do secret ──────────────────────────────────────────────
+// Ordem: localStorage (configurado pelo usuário) → env var → fallback localhost
+// Como o ngrok free gera URL nova a cada sessão, deixamos o usuário sobrescrever
+// pela tela /settings sem precisar redeploy.
+
+const ENV_BASE   = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const ENV_SECRET = process.env.NEXT_PUBLIC_API_SECRET || "";
+
+export const LS_KEY_URL    = "crivo:apiUrl";
+export const LS_KEY_SECRET = "crivo:apiSecret";
+
+function readLS(key: string): string {
+  if (typeof window === "undefined") return "";
+  try { return window.localStorage.getItem(key) || ""; } catch { return ""; }
+}
+
+export function getApiUrl()    { return readLS(LS_KEY_URL)    || ENV_BASE;   }
+export function getApiSecret() { return readLS(LS_KEY_SECRET) || ENV_SECRET; }
+
+export function setApiConfig(url: string, secret: string) {
+  if (typeof window === "undefined") return;
+  if (url)    window.localStorage.setItem(LS_KEY_URL, url.trim());
+  else        window.localStorage.removeItem(LS_KEY_URL);
+  if (secret) window.localStorage.setItem(LS_KEY_SECRET, secret.trim());
+  else        window.localStorage.removeItem(LS_KEY_SECRET);
+  // Atualiza axios in-place para próximas requisições
+  api.defaults.baseURL = getApiUrl();
+  api.defaults.headers["Authorization"] = `Bearer ${getApiSecret()}`;
+}
 
 export const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: getApiUrl(),
   headers: {
-    Authorization: `Bearer ${SECRET}`,
-    // Bypass da pagina de aviso do ngrok free
+    Authorization: `Bearer ${getApiSecret()}`,
     "ngrok-skip-browser-warning": "true",
   },
 });
+
+// Hidrata após mount no client (env serve como fallback no SSR)
+if (typeof window !== "undefined") {
+  api.defaults.baseURL = getApiUrl();
+  api.defaults.headers["Authorization"] = `Bearer ${getApiSecret()}`;
+}
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -113,4 +145,4 @@ export const getSystemStatus = () =>
   api.get<SystemStatus>("/status").then((r) => r.data);
 
 export const mediaUrl = (niche: string, interview: string, filename: string) =>
-  `${BASE_URL}/media/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${encodeURIComponent(filename)}`;
+  `${getApiUrl()}/media/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${encodeURIComponent(filename)}`;
