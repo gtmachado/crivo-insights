@@ -57,7 +57,7 @@ Os itens abaixo foram identificados após as Fases 0–4 e estão documentados e
 | GSD | Título | Status |
 |-----|--------|--------|
 | GSD-001 | Player de mídia (duração 0, não toca) | ✅ Concluído |
-| GSD-002 | Metadata de entrevista | ⬜ Pendente |
+| GSD-002 | Metadata de entrevista | ✅ Concluído |
 | GSD-003 | Refine com separação de participantes | ⬜ Pendente |
 | GSD-004 | Configurações de modelos via UI | ⬜ Pendente |
 | GSD-005 | Configurações de prompts editáveis | ⬜ Pendente |

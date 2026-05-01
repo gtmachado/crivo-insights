@@ -51,7 +51,7 @@ content_disposition_type="inline"  # removido filename=filename
 
 ## GSD-002 — Adicionar Metadata de Entrevista
 
-**Status:** ⬜ Pendente
+**Status:** ✅ Concluído (2026-05-01)
 
 **Objetivo:** Permitir registrar título, entrevistado, entrevistador, telefone, e-mail e data ao criar ou editar uma entrevista.
 

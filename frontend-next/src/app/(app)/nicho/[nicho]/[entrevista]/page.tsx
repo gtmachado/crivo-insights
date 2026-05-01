@@ -29,6 +29,7 @@ import { MarkdownEditor } from "@/components/editor/MarkdownEditor";
 import { MediaPlayer } from "@/components/media/MediaPlayer";
 import { FileExplorer } from "@/components/files/FileExplorer";
 import { InterviewHeader } from "@/components/interview/InterviewHeader";
+import { InterviewMeta } from "@/components/interview/InterviewMeta";
 import { DeleteInterviewDialog } from "@/components/interview/DeleteInterviewDialog";
 import { PipelineTimeline } from "@/components/pipeline/PipelineTimeline";
 import { Loader2, FileText, FolderOpen } from "lucide-react";
@@ -343,6 +344,9 @@ export default function EntrevistaPage() {
             />
           </div>
         )}
+
+        {/* Metadata da entrevista (entrevistado, entrevistador, etc.) */}
+        <InterviewMeta niche={niche} interview={interview} />
 
         <div className="flex-1 min-h-0 overflow-hidden">{renderViewer()}</div>
       </div>

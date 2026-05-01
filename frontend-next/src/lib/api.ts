@@ -48,6 +48,30 @@ if (typeof window !== "undefined") {
 
 export type Niche = string;
 
+/**
+ * Metadata de uma entrevista. Todos os campos são opcionais para manter
+ * compatibilidade com entrevistas anteriores ao GSD-002 (sem metadata.json).
+ *
+ * FUTURO (BL-007 / Supabase Auth): quando autenticação for implementada,
+ * interviewer_user_id será derivado do JWT pelo backend.
+ * interviewer_name virá do perfil Supabase. O campo já existe aqui para
+ * facilitar a migração sem breaking change.
+ */
+export type InterviewMeta = {
+  title?: string;
+  niche?: string;
+  interview_slug?: string;
+  interviewee_name?: string;
+  interviewee_phone?: string;
+  interviewee_email?: string;
+  interviewer_name?: string;
+  interviewer_user_id?: string; // reservado para Supabase user ID
+  notes?: string;
+  created_at?: string;
+  source_filename?: string;
+  updated_at?: string;
+};
+
 export type InterviewStages = {
   raw: boolean;
   refined: boolean;
@@ -105,16 +129,36 @@ export const getNiches = () =>
 export const getInterviews = (niche: string) =>
   api.get<Interview[]>(`/interviews/${encodeURIComponent(niche)}`).then((r) => r.data);
 
+/** Campos de metadata enviados junto com o upload. Todos opcionais. */
+export type UploadMetadata = Pick<
+  InterviewMeta,
+  | "title"
+  | "interviewee_name"
+  | "interviewee_phone"
+  | "interviewee_email"
+  | "interviewer_name"
+  | "notes"
+>;
+
 export const uploadInterview = (
   file: File,
   niche: string,
   interviewName: string,
   onProgress?: (pct: number) => void,
+  metadata?: UploadMetadata,
 ) => {
   const form = new FormData();
   form.append("file", file);
   form.append("niche", niche);
   form.append("interview_name", interviewName);
+
+  // Metadata — campos opcionais. Backend salva metadata.json antes do pipeline.
+  if (metadata?.title)              form.append("meta_title",               metadata.title);
+  if (metadata?.interviewee_name)   form.append("meta_interviewee_name",    metadata.interviewee_name);
+  if (metadata?.interviewee_phone)  form.append("meta_interviewee_phone",   metadata.interviewee_phone);
+  if (metadata?.interviewee_email)  form.append("meta_interviewee_email",   metadata.interviewee_email);
+  if (metadata?.interviewer_name)   form.append("meta_interviewer_name",    metadata.interviewer_name);
+  if (metadata?.notes)              form.append("meta_notes",               metadata.notes);
 
   return api.post<{ job_id: string; message: string }>("/interviews/upload", form, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -186,6 +230,27 @@ export const deleteInterview = (niche: string, interview: string) =>
   api
     .delete<{ ok: boolean; deleted: boolean }>(
       `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}`,
+    )
+    .then((r) => r.data);
+
+// ── Metadata da entrevista (GSD-002) ─────────────────────────────────────────
+
+export const getInterviewMeta = (niche: string, interview: string) =>
+  api
+    .get<InterviewMeta>(
+      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/meta`,
+    )
+    .then((r) => r.data);
+
+export const updateInterviewMeta = (
+  niche: string,
+  interview: string,
+  meta: Partial<InterviewMeta>,
+) =>
+  api
+    .put<{ ok: boolean }>(
+      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/meta`,
+      meta,
     )
     .then((r) => r.data);
 

@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { useQuery } from "@tanstack/react-query";
-import { getNiches, uploadInterview } from "@/lib/api";
+import { getNiches, uploadInterview, type UploadMetadata } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,14 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
 
+  // ── Metadata — opcionais ───────────────────────────────────────────────────
+  const [metaTitle, setMetaTitle]                   = useState("");
+  const [metaIntervieweeName, setMetaIntervieweeName] = useState("");
+  const [metaIntervieweePhone, setMetaIntervieweePhone] = useState("");
+  const [metaIntervieweeEmail, setMetaIntervieweeEmail] = useState("");
+  // FUTURO (BL-007): substituir por select com usuários Supabase
+  const [metaInterviewerName, setMetaInterviewerName] = useState("");
+
   const isNewNiche = niche === "__new__";
   const finalNiche = isNewNiche ? newNiche : niche;
   const canSubmit = !!file && !!finalNiche.trim() && !!interviewName.trim() && !uploading;
@@ -55,8 +63,17 @@ export default function UploadPage() {
     if (!file || !finalNiche || !interviewName) return;
     setUploading(true);
     setProgress(0);
+
+    const metadata: UploadMetadata = {
+      title:             metaTitle || interviewName,
+      interviewee_name:  metaIntervieweeName,
+      interviewee_phone: metaIntervieweePhone,
+      interviewee_email: metaIntervieweeEmail,
+      interviewer_name:  metaInterviewerName,
+    };
+
     try {
-      const result = await uploadInterview(file, finalNiche, interviewName, setProgress);
+      const result = await uploadInterview(file, finalNiche, interviewName, setProgress, metadata);
       setJobId(result.job_id);
       setJob(result.job_id, {
         job_id: result.job_id,
@@ -119,6 +136,68 @@ export default function UploadPage() {
               value={interviewName}
               onChange={(e) => setInterviewName(e.target.value)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Participantes (metadata) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Participantes</CardTitle>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Opcional — pode ser preenchido ou editado depois na página da entrevista.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Entrevistado */}
+            <div className="space-y-2">
+              <Label>Entrevistado</Label>
+              <Input
+                placeholder="Nome completo"
+                value={metaIntervieweeName}
+                onChange={(e) => setMetaIntervieweeName(e.target.value)}
+              />
+            </div>
+
+            {/*
+             * FUTURO (BL-007): substituir por <select> populado com usuários
+             * Supabase quando autenticação for implementada. Ver InterviewMeta.tsx.
+             */}
+            <div className="space-y-2">
+              <Label>Entrevistador</Label>
+              <Input
+                placeholder="Nome do entrevistador"
+                value={metaInterviewerName}
+                onChange={(e) => setMetaInterviewerName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>
+                Telefone{" "}
+                <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Input
+                placeholder="+55 11 99999-9999"
+                type="tel"
+                value={metaIntervieweePhone}
+                onChange={(e) => setMetaIntervieweePhone(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>
+                E-mail{" "}
+                <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Input
+                placeholder="email@exemplo.com"
+                type="email"
+                value={metaIntervieweeEmail}
+                onChange={(e) => setMetaIntervieweeEmail(e.target.value)}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

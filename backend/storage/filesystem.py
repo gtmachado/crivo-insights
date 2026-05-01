@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import re
 import shutil
 
@@ -186,6 +187,38 @@ def structured_docs_for_selected(
         if d.is_dir() and path.exists():
             result.append((slug, read_markdown(path)))
     return result
+
+
+# ── Metadata da entrevista ────────────────────────────────────────────────────
+
+META_FILENAME = "metadata.json"
+
+
+def read_meta(niche: str, interview_name: str) -> dict:
+    """
+    Lê o metadata.json da entrevista.
+    Retorna {} se o arquivo não existir — metadata é opcional para entrevistas
+    antigas que não passaram pelo upload com GSD-002.
+    """
+    path = interview_path(niche, interview_name) / META_FILENAME
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_meta(niche: str, interview_name: str, data: dict) -> None:
+    """
+    Salva (ou sobrescreve) o metadata.json da entrevista.
+    Cria o diretório da entrevista se necessário, mas NÃO cria as subpastas
+    (use interview_dir para isso).
+    """
+    base = interview_path(niche, interview_name)
+    base.mkdir(parents=True, exist_ok=True)
+    path = base / META_FILENAME
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def glossary_docs_for_niche(niche: str) -> list[tuple[str, str]]:
