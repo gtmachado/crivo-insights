@@ -111,7 +111,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-60 shrink-0 border-r border-border flex flex-col h-full">
+    <aside className="w-60 shrink-0 glass flex flex-col h-full border-r-0">
       <div className="p-3 space-y-0.5">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link

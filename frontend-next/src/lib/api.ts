@@ -62,6 +62,17 @@ export type Interview = {
 
 export type JobStatus = "running" | "done" | "error";
 
+export type JobStage = {
+  id: "upload" | "convert" | "transcribe" | "refine" | "structure" | "glossary";
+  label: string;
+  status: "pending" | "processing" | "done" | "error";
+  started_at?: number | null;
+  ended_at?: number | null;
+  logs?: string[];
+  model?: string | null;
+  error?: string | null;
+};
+
 export type Job = {
   job_id: string;
   niche: string;
@@ -69,6 +80,11 @@ export type Job = {
   status: JobStatus;
   log: string[];
   paths: Record<string, string>;
+  /** Lista de stages com tempos/modelo/logs por etapa. Pode estar ausente em
+   * jobs antigos da memória (compat). */
+  stages?: JobStage[];
+  started_at?: number | null;
+  ended_at?: number | null;
 };
 
 export type SystemStatus = {
@@ -117,6 +133,7 @@ export const getAllJobs = () =>
 // ── Documentos ────────────────────────────────────────────────────────────────
 
 export type DocType = "raw" | "refined" | "structured" | "glossary";
+export type EditableDocType = Exclude<DocType, "glossary">;
 
 export const getDocument = (niche: string, interview: string, doc: DocType) =>
   api
@@ -124,6 +141,53 @@ export const getDocument = (niche: string, interview: string, doc: DocType) =>
       `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${doc}`,
     )
     .then((r) => r.data.content);
+
+export const updateDocument = (
+  niche: string,
+  interview: string,
+  doc: EditableDocType,
+  content: string,
+) =>
+  api
+    .put<{ ok: boolean; path: string; size: number }>(
+      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${doc}`,
+      { content },
+    )
+    .then((r) => r.data);
+
+// ── Arquivos da entrevista (FileExplorer) ─────────────────────────────────────
+
+export type InterviewSubdir =
+  | "raw"
+  | "processed"
+  | "parts"
+  | "outputs"
+  | "glossary";
+
+export type FileEntry = {
+  name: string;
+  size: number;
+  /** epoch (segundos) */
+  modified: number;
+};
+
+export type InterviewFiles = Record<InterviewSubdir, FileEntry[]>;
+
+export const getInterviewFiles = (niche: string, interview: string) =>
+  api
+    .get<InterviewFiles>(
+      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/files`,
+    )
+    .then((r) => r.data);
+
+// ── Exclusão de entrevista ────────────────────────────────────────────────────
+
+export const deleteInterview = (niche: string, interview: string) =>
+  api
+    .delete<{ ok: boolean; deleted: boolean }>(
+      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}`,
+    )
+    .then((r) => r.data);
 
 // ── Consolidação ──────────────────────────────────────────────────────────────
 
@@ -139,10 +203,58 @@ export const getConsolidatedInsights = (niche: string) =>
 export const getConsolidatedGlossary = (niche: string) =>
   api.get<{ content: string }>(`/niches/${encodeURIComponent(niche)}/glossary`).then((r) => r.data.content);
 
+// ── Análise manual de nicho (Fase 4) ──────────────────────────────────────────
+
+export type NicheAnalysisJob = {
+  status: "running" | "done" | "error";
+  kind: "analysis";
+  niche: string;
+  interviews: string[];
+  log: string[];
+  path?: string;
+};
+
+export const analyzeNiche = (niche: string, interviews: string[]) =>
+  api
+    .post<{ job_id: string; message: string }>(
+      `/niches/${encodeURIComponent(niche)}/analyze`,
+      { interviews },
+    )
+    .then((r) => r.data);
+
+export const getNicheAnalysisJob = (niche: string, jobId: string) =>
+  api
+    .get<NicheAnalysisJob>(
+      `/niches/${encodeURIComponent(niche)}/analyze/status/${encodeURIComponent(jobId)}`,
+    )
+    .then((r) => r.data);
+
+export const getNicheAnalysis = (niche: string) =>
+  api
+    .get<{ content: string }>(
+      `/niches/${encodeURIComponent(niche)}/analysis`,
+    )
+    .then((r) => r.data.content);
+
 // ── Sistema ───────────────────────────────────────────────────────────────────
 
 export const getSystemStatus = () =>
   api.get<SystemStatus>("/status").then((r) => r.data);
 
-export const mediaUrl = (niche: string, interview: string, filename: string) =>
-  `${getApiUrl()}/media/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${encodeURIComponent(filename)}`;
+/**
+ * URL para o endpoint /media. Inclui o token como query param porque tags
+ * <audio>/<video>/<source> não enviam o header Authorization. O backend
+ * aceita ambas as formas (header tem prioridade).
+ *
+ * Também adiciona `ngrok-skip-browser-warning=true` para evitar a página
+ * intersticial do ngrok free.
+ */
+export const mediaUrl = (niche: string, interview: string, filename: string) => {
+  const url = `${getApiUrl()}/media/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${encodeURIComponent(filename)}`;
+  const params = new URLSearchParams();
+  const token = getApiSecret();
+  if (token) params.set("token", token);
+  params.set("ngrok-skip-browser-warning", "true");
+  const qs = params.toString();
+  return qs ? `${url}?${qs}` : url;
+};

@@ -166,6 +166,51 @@ def _call_anthropic(model: str, system_prompt: str, user_content: str) -> str:
 
 # ─── Ponto de entrada ─────────────────────────────────────────────────────────
 
+def call_with_model(
+    provider: str,
+    model: str,
+    system_prompt: str,
+    user_content: str,
+    metadata: Optional[dict] = None,
+) -> str:
+    """
+    Chama um (provider, model) específico, ignorando settings.llm_provider.
+
+    Útil quando uma tarefa exige um modelo fixo independentemente da config
+    global do projeto — caso típico: análise de nicho que precisa
+    obrigatoriamente de Claude Sonnet 4.6.
+    """
+    meta_str = f" [{metadata}]" if metadata else ""
+    log.info(
+        "LLM call_with_model | provider=%-12s model=%s%s | input=%d chars",
+        provider, model, meta_str, len(user_content),
+    )
+    t0 = time.perf_counter()
+    try:
+        if provider == "openrouter":
+            result = _call_openrouter(model, system_prompt, user_content)
+        elif provider == "anthropic":
+            result = _call_anthropic(model, system_prompt, user_content)
+        elif provider == "gemini":
+            result = _call_gemini(model, system_prompt, user_content)
+        else:
+            raise ValueError(f"Provider desconhecido: '{provider}'.")
+
+        elapsed = time.perf_counter() - t0
+        log.info(
+            "LLM done (forced) | provider=%-12s model=%s | %.1fs | output=%d chars",
+            provider, model, elapsed, len(result),
+        )
+        return result
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        log.error(
+            "LLM ERRO (forced) | provider=%s model=%s | %.1fs | %s",
+            provider, model, elapsed, exc,
+        )
+        raise
+
+
 def call(
     task: str,
     system_prompt: str,

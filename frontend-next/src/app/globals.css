@@ -1,8 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "highlight.js/styles/github-dark.css" layer(base);
 
 @custom-variant dark (&:is(.dark *));
+
+/* ───────────────────────── Tokens expostos ao Tailwind ────────────────────── */
 
 @theme inline {
   --color-background: var(--background);
@@ -48,83 +51,408 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ───────────────────────── Light mode (default) ──────────────────────────── */
+/*
+   Paleta Crivo Insights:
+   - base azul-violeta (primary)
+   - accent roxo
+   - bg quase branco com tom levíssimo azul
+*/
+
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.005 270);
+  --foreground: oklch(0.18 0.04 265);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --card-foreground: oklch(0.18 0.04 265);
+
+  --popover: oklch(0.99 0.005 270);
+  --popover-foreground: oklch(0.18 0.04 265);
+
+  --primary: oklch(0.55 0.22 270);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --secondary: oklch(0.95 0.02 280);
+  --secondary-foreground: oklch(0.3 0.12 280);
+
+  --muted: oklch(0.96 0.01 270);
+  --muted-foreground: oklch(0.5 0.04 270);
+
+  --accent: oklch(0.93 0.04 295);
+  --accent-foreground: oklch(0.35 0.18 295);
+
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  --border: oklch(0.9 0.015 270);
+  --input: oklch(0.92 0.015 270);
+  --ring: oklch(0.6 0.18 270);
+
+  --chart-1: oklch(0.6 0.2 270);
+  --chart-2: oklch(0.65 0.18 295);
+  --chart-3: oklch(0.7 0.16 240);
+  --chart-4: oklch(0.55 0.2 310);
+  --chart-5: oklch(0.7 0.12 260);
+
+  --radius: 0.65rem;
+
+  --sidebar: oklch(0.97 0.012 275);
+  --sidebar-foreground: oklch(0.25 0.06 270);
+  --sidebar-primary: oklch(0.55 0.22 270);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.93 0.04 295);
+  --sidebar-accent-foreground: oklch(0.3 0.16 295);
+  --sidebar-border: oklch(0.9 0.015 270);
+  --sidebar-ring: oklch(0.6 0.18 270);
+
+  /* Crivo extras — gradient, glow, glass */
+  --gradient-from: oklch(0.55 0.22 270);
+  --gradient-via:  oklch(0.6 0.2 285);
+  --gradient-to:   oklch(0.65 0.2 305);
+
+  --glow-primary: 91 108 255;          /* rgb base do primary p/ usar com alpha */
+  --glow-accent:  155 109 255;
+
+  --glass-bg:     rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(91, 108, 255, 0.12);
+
+  --ambient-blob-1: oklch(0.65 0.22 275);
+  --ambient-blob-2: oklch(0.65 0.22 305);
+  --ambient-blob-3: oklch(0.7 0.18 240);
+  --ambient-blob-opacity: 0.35;
 }
 
+/* ───────────────────────── Dark mode ─────────────────────────────────────── */
+
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.13 0.02 265);
+  --foreground: oklch(0.96 0.01 270);
+
+  --card: oklch(0.18 0.03 268);
+  --card-foreground: oklch(0.96 0.01 270);
+
+  --popover: oklch(0.18 0.03 268);
+  --popover-foreground: oklch(0.96 0.01 270);
+
+  --primary: oklch(0.7 0.2 275);
+  --primary-foreground: oklch(0.13 0.02 265);
+
+  --secondary: oklch(0.25 0.05 280);
+  --secondary-foreground: oklch(0.95 0.04 290);
+
+  --muted: oklch(0.2 0.025 268);
+  --muted-foreground: oklch(0.68 0.04 270);
+
+  --accent: oklch(0.27 0.07 290);
+  --accent-foreground: oklch(0.96 0.04 295);
+
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.7 0.2 275);
+
+  --chart-1: oklch(0.72 0.2 275);
+  --chart-2: oklch(0.75 0.18 295);
+  --chart-3: oklch(0.7 0.18 240);
+  --chart-4: oklch(0.65 0.22 310);
+  --chart-5: oklch(0.78 0.14 265);
+
+  --sidebar: oklch(0.16 0.025 268);
+  --sidebar-foreground: oklch(0.92 0.02 270);
+  --sidebar-primary: oklch(0.7 0.2 275);
+  --sidebar-primary-foreground: oklch(0.13 0.02 265);
+  --sidebar-accent: oklch(0.25 0.06 285);
+  --sidebar-accent-foreground: oklch(0.95 0.04 290);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.7 0.2 275);
+
+  --gradient-from: oklch(0.7 0.2 275);
+  --gradient-via:  oklch(0.72 0.2 295);
+  --gradient-to:   oklch(0.75 0.2 315);
+
+  --glow-primary: 124 138 255;
+  --glow-accent:  180 140 255;
+
+  --glass-bg:     rgba(20, 22, 40, 0.55);
+  --glass-border: rgba(124, 138, 255, 0.18);
+
+  --ambient-blob-1: oklch(0.55 0.25 275);
+  --ambient-blob-2: oklch(0.6 0.25 305);
+  --ambient-blob-3: oklch(0.55 0.22 240);
+  --ambient-blob-opacity: 0.45;
 }
+
+/* ───────────────────────── Base ─────────────────────────────────────────── */
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
+  html, body {
+    @apply h-full;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* Suaviza transições de tema */
+    transition: background-color 0.4s ease, color 0.4s ease;
   }
+
   html {
     @apply font-sans;
+    color-scheme: light;
   }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  ::selection {
+    background: rgba(var(--glow-primary), 0.25);
+  }
+}
+
+/* ───────────────────────── Utilities Crivo ──────────────────────────────── */
+
+@layer utilities {
+  .gradient-text {
+    background-image: linear-gradient(
+      135deg,
+      var(--gradient-from),
+      var(--gradient-via),
+      var(--gradient-to)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .gradient-bg {
+    background-image: linear-gradient(
+      135deg,
+      var(--gradient-from),
+      var(--gradient-via),
+      var(--gradient-to)
+    );
+  }
+
+  .gradient-border {
+    border: 1px solid transparent;
+    background-clip: padding-box, border-box;
+    background-origin: padding-box, border-box;
+    background-image:
+      linear-gradient(var(--card), var(--card)),
+      linear-gradient(135deg, var(--gradient-from), var(--gradient-to));
+  }
+
+  .glass {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--glass-border);
+  }
+
+  .glass-strong {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid var(--glass-border);
+  }
+
+  .glow-primary {
+    box-shadow:
+      0 0 0 1px rgba(var(--glow-primary), 0.18),
+      0 6px 30px -8px rgba(var(--glow-primary), 0.45);
+  }
+
+  .glow-soft {
+    box-shadow: 0 0 24px -4px rgba(var(--glow-primary), 0.25);
+  }
+}
+
+/* ───────────────────────── Ambient blobs ────────────────────────────────── */
+
+@keyframes blob-drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(6%, -4%, 0) scale(1.08); }
+  66%      { transform: translate3d(-4%, 5%, 0) scale(0.95); }
+}
+
+@keyframes blob-drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(-5%, 6%, 0) scale(0.92); }
+  66%      { transform: translate3d(5%, -3%, 0) scale(1.06); }
+}
+
+@keyframes blob-drift-c {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(4%, 4%, 0) scale(1.1); }
+}
+
+.ambient-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(110px);
+  opacity: var(--ambient-blob-opacity);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.ambient-blob-a {
+  background: var(--ambient-blob-1);
+  animation: blob-drift-a 22s ease-in-out infinite;
+}
+
+.ambient-blob-b {
+  background: var(--ambient-blob-2);
+  animation: blob-drift-b 26s ease-in-out infinite;
+}
+
+.ambient-blob-c {
+  background: var(--ambient-blob-3);
+  animation: blob-drift-c 30s ease-in-out infinite;
+}
+
+/* Em telas com prefers-reduced-motion: pausar blobs */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob-a,
+  .ambient-blob-b,
+  .ambient-blob-c { animation: none; }
+
+  body { transition: none; }
+}
+
+/* ───────────────────────── Markdown / Prose ─────────────────────────────── */
+/* Estilos para conteúdo gerado por <MarkdownPreview/> */
+
+.crivo-prose {
+  color: var(--foreground);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+.crivo-prose h1 { font-size: 1.6rem; font-weight: 700; margin: 1.5rem 0 1rem; letter-spacing: -0.01em; }
+.crivo-prose h2 { font-size: 1.25rem; font-weight: 600; margin: 1.5rem 0 0.6rem; color: var(--primary); letter-spacing: -0.005em; }
+.crivo-prose h3 { font-size: 1.05rem; font-weight: 600; margin: 1.2rem 0 0.4rem; }
+.crivo-prose h4 { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.3rem; color: var(--muted-foreground); }
+.crivo-prose p { margin: 0.6rem 0; }
+.crivo-prose ul, .crivo-prose ol { margin: 0.6rem 0; padding-left: 1.4rem; }
+.crivo-prose ul { list-style: disc; }
+.crivo-prose ol { list-style: decimal; }
+.crivo-prose li { margin: 0.25rem 0; }
+.crivo-prose li::marker { color: var(--primary); }
+.crivo-prose strong { font-weight: 600; color: var(--foreground); }
+.crivo-prose em { font-style: italic; }
+.crivo-prose blockquote {
+  border-left: 3px solid var(--primary);
+  background: rgba(var(--glow-primary), 0.06);
+  padding: 0.5rem 0.9rem;
+  margin: 0.8rem 0;
+  border-radius: 0 8px 8px 0;
+  color: var(--muted-foreground);
+}
+.crivo-prose code:not(pre code) {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: rgba(var(--glow-primary), 0.12);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: var(--primary);
+}
+.crivo-prose pre {
+  background: var(--muted);
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.85em;
+  margin: 0.8rem 0;
+  border: 1px solid var(--border);
+}
+.crivo-prose pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.crivo-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.crivo-prose a:hover { opacity: 0.8; }
+.crivo-prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.4rem 0;
+}
+.crivo-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8rem 0;
+  font-size: 0.85em;
+}
+.crivo-prose th, .crivo-prose td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.7rem;
+  text-align: left;
+}
+.crivo-prose th {
+  background: rgba(var(--glow-primary), 0.08);
+  font-weight: 600;
+}
+.crivo-prose img {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+/* ───────────────────────── Print (export PDF) ───────────────────────────── */
+/* Usado pelas rotas /.../glossario/print. Layout assume fundo branco e
+   tipografia preta independentemente do tema do app. */
+
+@page {
+  size: A4;
+  margin: 14mm 12mm;
+}
+
+/* Esconde elementos de UI durante a impressão. Aplicar com `class="no-print"`. */
+@media print {
+  .no-print { display: none !important; }
+
+  html, body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Some com qualquer ambient bg que tenha sobrado */
+  .ambient-blob,
+  .ambient-blob-a,
+  .ambient-blob-b,
+  .ambient-blob-c { display: none !important; }
+
+  /* Permite quebra entre seções sem cortar termos pela metade */
+  .break-inside-avoid { break-inside: avoid; }
+
+  /* Garantia de cor na impressão */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Layout em colunas para o GlossaryPrintLayout. Em tela é coluna única;
+   na impressão vira 2 colunas pra densidade legível. */
+.print-columns {
+  column-count: 1;
+  column-gap: 1.4rem;
+}
+
+@media print {
+  .print-columns { column-count: 2; }
+
+  .print-toc { display: none !important; }
+}
+
+/* Fundo do print (sempre branco, mesmo em dark mode) */
+.print-root {
+  color-scheme: light;
 }

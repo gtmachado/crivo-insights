@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { getSystemStatus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { LogOut, Mic2, Settings, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,13 +48,17 @@ export function Header() {
   }
 
   return (
-    <header className="h-14 border-b border-border flex items-center justify-between px-6 shrink-0">
-      <div className="flex items-center gap-2">
-        <Mic2 className="h-5 w-5 text-primary" />
-        <span className="font-semibold text-sm">Crivo Insights</span>
-      </div>
-      <div className="flex items-center gap-2">
+    <header className="h-14 glass flex items-center justify-between px-6 shrink-0 z-10">
+      <Link href="/dashboard" className="flex items-center gap-2 group">
+        <span className="relative inline-flex h-7 w-7 items-center justify-center rounded-md gradient-bg text-white glow-soft">
+          <Mic2 className="h-4 w-4" />
+        </span>
+        <span className="font-semibold text-sm gradient-text">Crivo Insights</span>
+      </Link>
+
+      <div className="flex items-center gap-1.5">
         <ApiStatusPill />
+        <ThemeToggle />
         <Link
           href="/settings"
           className="inline-flex items-center gap-2 h-9 px-3 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"

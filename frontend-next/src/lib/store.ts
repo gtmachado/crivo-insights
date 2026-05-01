@@ -1,5 +1,16 @@
 import { create } from "zustand";
-import type { Job } from "./api";
+import type { Job, InterviewSubdir } from "./api";
+import type { FileKind } from "./files";
+
+/**
+ * Identificador estável do arquivo atualmente aberto no viewer da entrevista.
+ * Limpo ao trocar de entrevista.
+ */
+export type CurrentFile = {
+  subdir: InterviewSubdir;
+  name: string;
+  kind: FileKind;
+};
 
 type AppStore = {
   // jobs ativos (polling)
@@ -7,10 +18,14 @@ type AppStore = {
   setJob: (id: string, job: Job) => void;
   removeJob: (id: string) => void;
 
-  // navegação do explorer
+  // navegação do explorer (legado — mantido por compat)
   selectedNiche: string | null;
   selectedInterview: string | null;
   setSelected: (niche: string | null, interview?: string | null) => void;
+
+  // arquivo atualmente aberto no viewer da página de entrevista
+  currentFile: CurrentFile | null;
+  setCurrentFile: (f: CurrentFile | null) => void;
 };
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -27,4 +42,7 @@ export const useAppStore = create<AppStore>((set) => ({
   selectedInterview: null,
   setSelected: (niche, interview = null) =>
     set({ selectedNiche: niche, selectedInterview: interview }),
+
+  currentFile: null,
+  setCurrentFile: (f) => set({ currentFile: f }),
 }));

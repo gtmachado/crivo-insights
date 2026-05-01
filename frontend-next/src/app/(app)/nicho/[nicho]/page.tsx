@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,32 +13,16 @@ import {
 } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { GlossaryPanel } from "@/components/glossary/GlossaryPanel";
+import { MarkdownPreview } from "@/components/markdown/MarkdownPreview";
+import { AnalyzeNicheButton } from "@/components/niche/AnalyzeNicheButton";
+import { NicheAnalysisTab } from "@/components/niche/NicheAnalysisTab";
 import {
   Loader2, FileText, CheckCircle2, Clock, Sparkles, BookOpen,
-  ChevronRight, AlertCircle,
+  ChevronRight, AlertCircle, Brain,
 } from "lucide-react";
-
-// ── Markdown viewer simples ───────────────────────────────────────────────────
-
-function MarkdownViewer({ content }: { content: string }) {
-  const lines = content.split("\n");
-  return (
-    <div className="prose prose-sm prose-invert max-w-none">
-      {lines.map((line, i) => {
-        if (line.startsWith("# "))   return <h1 key={i} className="text-xl font-bold mt-6 mb-3">{line.slice(2)}</h1>;
-        if (line.startsWith("## "))  return <h2 key={i} className="text-lg font-semibold mt-5 mb-2 text-primary">{line.slice(3)}</h2>;
-        if (line.startsWith("### ")) return <h3 key={i} className="text-base font-semibold mt-4 mb-1">{line.slice(4)}</h3>;
-        if (line.startsWith("- ") || line.startsWith("* "))
-          return <li key={i} className="ml-4 text-sm">{line.slice(2)}</li>;
-        if (line.trim() === "" || line.trim() === "---") return <div key={i} className="h-2" />;
-        return <p key={i} className="text-sm leading-relaxed text-foreground/90">{line}</p>;
-      })}
-    </div>
-  );
-}
+import { cn } from "@/lib/utils";
 
 // ── Stage badges ──────────────────────────────────────────────────────────────
 
@@ -55,7 +39,7 @@ function StageDot({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-// ── Botão de consolidação ─────────────────────────────────────────────────────
+// ── Botões legados de consolidação ────────────────────────────────────────────
 
 function ConsolidateButton({
   label, icon: Icon, onClick, isPending, jobId,
@@ -70,22 +54,22 @@ function ConsolidateButton({
     <button
       onClick={onClick}
       disabled={isPending}
-      className="flex items-center gap-2 rounded-lg border border-border bg-accent/30 hover:bg-accent px-4 py-3 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full"
+      className="flex items-center gap-2 rounded-md border border-border bg-accent/20 hover:bg-accent px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {isPending ? (
-        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
       ) : (
-        <Icon className="h-4 w-4 text-primary" />
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
       )}
-      <span className="flex-1 text-left">{isPending ? "Processando…" : label}</span>
+      <span>{isPending ? "Processando…" : label}</span>
       {jobId && (
-        <span className="text-xs text-muted-foreground font-mono">#{jobId}</span>
+        <span className="text-[10px] text-muted-foreground font-mono ml-1">#{jobId}</span>
       )}
     </button>
   );
 }
 
-// ── Viewer de consolidado ─────────────────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────────────────────────────
 
 function ConsolidatedInsightsTab({ niche }: { niche: string }) {
   const { data, isLoading, isError } = useQuery({
@@ -111,7 +95,7 @@ function ConsolidatedInsightsTab({ niche }: { niche: string }) {
   return (
     <ScrollArea className="h-full">
       <div className="p-6">
-        <MarkdownViewer content={data} />
+        <MarkdownPreview content={data} />
       </div>
     </ScrollArea>
   );
@@ -149,7 +133,13 @@ export default function NichoPage() {
   const qc = useQueryClient();
 
   const [insightsJobId, setInsightsJobId] = useState<string | undefined>();
-  const [glossaryJobId, setGlossaryJobId]  = useState<string | undefined>();
+  const [glossaryJobId, setGlossaryJobId] = useState<string | undefined>();
+
+  // Seleção da Fase 4. Set<slug>. Reset quando muda o nicho.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setSelected(new Set());
+  }, [niche]);
 
   const { data: interviews = [], isLoading } = useQuery({
     queryKey: ["interviews", niche],
@@ -157,11 +147,49 @@ export default function NichoPage() {
     staleTime: 10_000,
   });
 
+  // Apenas entrevistas com 03_estruturada.md são candidatas válidas pra análise.
+  const eligible = useMemo(
+    () => interviews.filter((iv) => iv.stages?.structured),
+    [interviews],
+  );
+  const eligibleNames = useMemo(
+    () => new Set(eligible.map((iv) => iv.name)),
+    [eligible],
+  );
+
+  // Mantém apenas entrevistas elegíveis na seleção (filtra automaticamente
+  // se uma deixou de ser elegível por ex.)
+  useEffect(() => {
+    setSelected((cur) => {
+      const next = new Set<string>();
+      cur.forEach((s) => { if (eligibleNames.has(s)) next.add(s); });
+      return next.size === cur.size ? cur : next;
+    });
+  }, [eligibleNames]);
+
+  const allEligibleSelected =
+    eligible.length > 0 && eligible.every((iv) => selected.has(iv.name));
+
+  function toggleOne(name: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((cur) => {
+      if (allEligibleSelected) return new Set();
+      return new Set(eligible.map((iv) => iv.name));
+    });
+  }
+
   const consolidateInsightsMutation = useMutation({
     mutationFn: () => consolidateInsights(niche),
     onSuccess: (data) => {
       setInsightsJobId(data.job_id);
-      // Invalida após 10s para recarregar o conteúdo consolidado
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: ["consolidated-insights", niche] });
       }, 10_000);
@@ -178,22 +206,43 @@ export default function NichoPage() {
     },
   });
 
-  const total   = interviews.length;
-  const withRaw = interviews.filter((iv) => iv.stages?.raw).length;
-  const withStructured = interviews.filter((iv) => iv.stages?.structured).length;
+  const total = interviews.length;
+  const withRaw        = interviews.filter((iv) => iv.stages?.raw).length;
+  const withStructured = eligible.length;
   const withGlossary   = interviews.filter((iv) => iv.stages?.glossary).length;
+  const selectedSlugs  = useMemo(() => Array.from(selected), [selected]);
 
   return (
     <div className="flex h-full gap-0 -m-6 overflow-hidden">
       {/* Lista de entrevistas (esquerda) */}
       <div className="w-72 shrink-0 border-r border-border flex flex-col overflow-hidden">
         <div className="px-5 py-4 border-b border-border shrink-0">
-          <h2 className="text-base font-semibold truncate">{niche}</h2>
+          <h2 className="text-base font-semibold truncate gradient-text">{niche}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {total} entrevista{total !== 1 ? "s" : ""}
             {" · "}{withStructured} estruturada{withStructured !== 1 ? "s" : ""}
             {" · "}{withGlossary} com glossário
           </p>
+
+          {eligible.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="mt-3 flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <SelectionCheckbox
+                checked={allEligibleSelected}
+                indeterminate={selected.size > 0 && !allEligibleSelected}
+              />
+              <span>
+                {allEligibleSelected
+                  ? "Desmarcar todas"
+                  : selected.size > 0
+                    ? `${selected.size} de ${eligible.length} selecionada${selected.size > 1 ? "s" : ""}`
+                    : "Selecionar todas"}
+              </span>
+            </button>
+          )}
         </div>
 
         <ScrollArea className="flex-1 p-3">
@@ -209,28 +258,56 @@ export default function NichoPage() {
             <div className="space-y-1">
               {interviews.map((iv) => {
                 const href = `/nicho/${encodeURIComponent(niche)}/${encodeURIComponent(iv.name)}`;
+                const isEligible = eligibleNames.has(iv.name);
+                const isSelected = selected.has(iv.name);
                 return (
-                  <Link
+                  <div
                     key={iv.name}
-                    href={href}
-                    className="flex flex-col gap-1.5 rounded-md px-3 py-2.5 hover:bg-accent transition-colors group"
+                    className={cn(
+                      "flex flex-col gap-1.5 rounded-md px-3 py-2 transition-colors group",
+                      isSelected
+                        ? "bg-primary/10 border border-primary/30"
+                        : "hover:bg-accent border border-transparent",
+                    )}
                   >
                     <div className="flex items-center gap-2">
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="text-sm truncate group-hover:text-foreground text-foreground/80">
-                        {iv.name}
-                      </span>
-                      <ChevronRight className="h-3.5 w-3.5 ml-auto text-muted-foreground/40 shrink-0" />
+                      <button
+                        type="button"
+                        onClick={() => isEligible && toggleOne(iv.name)}
+                        disabled={!isEligible}
+                        title={
+                          isEligible
+                            ? "Incluir/excluir esta entrevista da análise"
+                            : "Sem 03_estruturada.md — não pode entrar na análise"
+                        }
+                        aria-label={`Selecionar ${iv.name}`}
+                        className={cn(
+                          "shrink-0",
+                          !isEligible && "opacity-30 cursor-not-allowed",
+                        )}
+                      >
+                        <SelectionCheckbox checked={isSelected} disabled={!isEligible} />
+                      </button>
+                      <Link
+                        href={href}
+                        className="flex-1 min-w-0 flex items-center gap-1.5"
+                      >
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="text-sm truncate text-foreground/80 group-hover:text-foreground">
+                          {iv.name}
+                        </span>
+                        <ChevronRight className="h-3.5 w-3.5 ml-auto text-muted-foreground/40 shrink-0" />
+                      </Link>
                     </div>
                     {iv.stages && (
-                      <div className="flex flex-wrap gap-1 ml-5">
-                        <StageDot ok={iv.stages.raw}        label="Bruta"      />
-                        <StageDot ok={iv.stages.refined}    label="Refinada"   />
-                        <StageDot ok={iv.stages.structured} label="Estrut."    />
-                        <StageDot ok={iv.stages.glossary}   label="Glossário"  />
+                      <div className="flex flex-wrap gap-1 ml-7">
+                        <StageDot ok={iv.stages.raw}        label="Bruta"     />
+                        <StageDot ok={iv.stages.refined}    label="Refinada"  />
+                        <StageDot ok={iv.stages.structured} label="Estrut."   />
+                        <StageDot ok={iv.stages.glossary}   label="Glossário" />
                       </div>
                     )}
-                  </Link>
+                  </div>
                 );
               })}
             </div>
@@ -238,58 +315,90 @@ export default function NichoPage() {
         </ScrollArea>
       </div>
 
-      {/* Painel de consolidação (direita) */}
+      {/* Painel direito */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-border shrink-0 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Consolidados do Nicho</h3>
+        <div className="px-6 py-4 border-b border-border shrink-0 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5">
+              <Brain className="h-4 w-4 text-primary" />
+              Análise do nicho
+            </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Insights e glossário unificados de todas as entrevistas
+              Selecione entrevistas e rode Claude Sonnet 4.6 para gerar uma
+              análise consolidada.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Badge variant="secondary" className="text-xs">
               {withRaw}/{total} transcritas
             </Badge>
           </div>
         </div>
 
-        <div className="px-6 py-3 border-b border-border shrink-0 flex gap-3">
-          <div className="flex-1">
-            <ConsolidateButton
-              label="Consolidar Insights"
-              icon={Sparkles}
-              onClick={() => consolidateInsightsMutation.mutate()}
-              isPending={consolidateInsightsMutation.isPending}
-              jobId={insightsJobId}
-            />
-          </div>
-          <div className="flex-1">
-            <ConsolidateButton
-              label="Consolidar Glossário"
-              icon={BookOpen}
-              onClick={() => consolidateGlossaryMutation.mutate()}
-              isPending={consolidateGlossaryMutation.isPending}
-              jobId={glossaryJobId}
-            />
-          </div>
+        {/* Barra de ação principal — Fase 4 */}
+        <div className="px-6 py-3 border-b border-border shrink-0 flex flex-wrap items-center gap-3">
+          <AnalyzeNicheButton
+            niche={niche}
+            selectedSlugs={selectedSlugs}
+            totalCount={withStructured}
+          />
+
+          <div className="h-5 w-px bg-border mx-1" aria-hidden />
+
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            Consolidações automáticas
+          </span>
+          <ConsolidateButton
+            label="Consolidar Insights"
+            icon={Sparkles}
+            onClick={() => consolidateInsightsMutation.mutate()}
+            isPending={consolidateInsightsMutation.isPending}
+            jobId={insightsJobId}
+          />
+          <ConsolidateButton
+            label="Consolidar Glossário"
+            icon={BookOpen}
+            onClick={() => consolidateGlossaryMutation.mutate()}
+            isPending={consolidateGlossaryMutation.isPending}
+            jobId={glossaryJobId}
+          />
         </div>
 
-        <Tabs defaultValue="insights" className="flex flex-col flex-1 overflow-hidden">
-          <div className="px-6 pt-3 shrink-0">
+        <Tabs defaultValue="analysis" className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-6 pt-3 shrink-0 flex items-center justify-between gap-2">
             <TabsList className="h-8">
+              <TabsTrigger value="analysis" className="text-xs px-4">
+                <Brain className="h-3.5 w-3.5 mr-1.5" />
+                Análise
+              </TabsTrigger>
               <TabsTrigger value="insights" className="text-xs px-4">
                 <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                Insights
+                Insights consolidados
               </TabsTrigger>
               <TabsTrigger value="glossary" className="text-xs px-4">
                 <BookOpen className="h-3.5 w-3.5 mr-1.5" />
                 Glossário
               </TabsTrigger>
             </TabsList>
+
+            <Link
+              href={`/nicho/${encodeURIComponent(niche)}/glossario`}
+              title="Abrir glossário consolidado em página completa"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Glossário em página completa</span>
+              <ChevronRight className="h-3 w-3" />
+            </Link>
           </div>
 
           <div className="flex-1 overflow-hidden">
+            <TabsContent value="analysis" className="h-full m-0 data-[state=active]:flex flex-col">
+              <NicheAnalysisTab
+                niche={niche}
+                hasInterviewsSelected={selected.size > 0}
+              />
+            </TabsContent>
             <TabsContent value="insights" className="h-full m-0 data-[state=active]:flex flex-col">
               <ConsolidatedInsightsTab niche={niche} />
             </TabsContent>
@@ -300,5 +409,35 @@ export default function NichoPage() {
         </Tabs>
       </div>
     </div>
+  );
+}
+
+// ── Checkbox visual ───────────────────────────────────────────────────────────
+
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  disabled = false,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
+        checked || indeterminate
+          ? "bg-primary border-primary text-primary-foreground"
+          : "bg-background border-muted-foreground/40",
+        disabled && "opacity-40",
+      )}
+    >
+      {indeterminate ? (
+        <span className="block h-0.5 w-2 bg-current rounded-sm" />
+      ) : checked ? (
+        <CheckCircle2 className="h-3 w-3" strokeWidth={3} />
+      ) : null}
+    </span>
   );
 }
