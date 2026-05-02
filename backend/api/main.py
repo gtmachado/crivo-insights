@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
-from backend.api.routes import interviews, niches
+from backend.api.routes import interviews, niches, config
 from backend.core.config import settings
 from backend.services.llm_client import _resolve_model
 from backend.storage.filesystem import interview_path
@@ -51,6 +51,7 @@ def verify_token(request: Request):
 
 app.include_router(interviews.router)
 app.include_router(niches.router)
+app.include_router(config.router)
 
 
 @app.get("/health")

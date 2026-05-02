@@ -23,6 +23,7 @@ next-env.d.ts
 
 # ── Dados gerados localmente ──────────────────────────────────────────────────
 data/niches/
+data/config/
 data/test_niches/
 data/test_input/
 data/_tmp/

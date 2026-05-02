@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getApiUrl, getApiSecret, setApiConfig, getSystemStatus } from "@/lib/api";
+import { ModelSettings } from "@/components/settings/ModelSettings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -139,6 +140,9 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* GSD-004 — Modelos de IA por etapa */}
+      <ModelSettings />
     </div>
   );
 }

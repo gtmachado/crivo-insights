@@ -306,6 +306,33 @@ export const getNicheAnalysis = (niche: string) =>
 export const getSystemStatus = () =>
   api.get<SystemStatus>("/status").then((r) => r.data);
 
+// ── Configuração de modelos (GSD-004) ─────────────────────────────────────────
+
+export type ModelConfig = {
+  /** Overrides salvos em data/config/models.json */
+  saved: Record<string, string>;
+  /** Modelo efetivo em runtime por etapa (saved → .env → default do código) */
+  effective: Record<string, string>;
+  /** Lista de modelos permitidos no dropdown */
+  allowed_models: string[];
+  /** Etapas fixas, não configuráveis (ex: niche_analysis) */
+  fixed: Record<string, string>;
+};
+
+export type ModelConfigUpdate = {
+  refine?: string;
+  structure?: string;
+  glossary?: string;
+  consolidate?: string;
+  consolidate_glossary?: string;
+};
+
+export const getModelConfig = () =>
+  api.get<ModelConfig>("/config/models").then((r) => r.data);
+
+export const updateModelConfig = (data: ModelConfigUpdate) =>
+  api.put<{ ok: boolean }>("/config/models", data).then((r) => r.data);
+
 /**
  * URL para o endpoint /media. Inclui o token como query param porque tags
  * <audio>/<video>/<source> não enviam o header Authorization. O backend

@@ -20,6 +20,7 @@ import logging
 from typing import Optional
 
 from backend.core.config import settings
+from backend.storage.filesystem import read_model_config
 
 log = logging.getLogger("llm_client")
 logging.basicConfig(
@@ -72,10 +73,21 @@ _MAX_TOKENS = 8192
 
 
 def _resolve_model(task: str) -> str:
-    """Retorna o modelo a usar: .env tem prioridade, senão usa default do provider."""
+    """
+    Retorna o modelo a usar, em ordem de prioridade:
+    1. data/config/models.json — salvo via UI (/settings)
+    2. .env override           — model_refine, model_structure, etc.
+    3. Defaults do provider    — _OPENROUTER_DEFAULTS / _GEMINI_DEFAULTS / _ANTHROPIC_DEFAULTS
+    """
+    # 1. Config salva via UI
+    saved = read_model_config().get(task, "")
+    if saved:
+        return saved
+    # 2. .env override
     override = settings.model_for(task)
     if override:
         return override
+    # 3. Defaults por provider
     provider = settings.llm_provider
     if provider == "gemini":
         return _GEMINI_DEFAULTS.get(task, "gemini-2.0-flash")
