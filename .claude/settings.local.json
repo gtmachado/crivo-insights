@@ -7,7 +7,8 @@
       "Bash(\"C:/Users/geils/AppData/Local/Programs/Python/Python311/python.exe\" -c \"from backend.api.main import app; from backend.api.routes.interviews import _initial_stages, _classify_stage, _model_for_stage; s = _initial_stages\\(\\); print\\('stages:', len\\(s\\), '|', [x['id'] for x in s]\\); print\\('model refine:', _model_for_stage\\('refine'\\)\\); print\\('classify:', _classify_stage\\('Refinando transcrição com Claude...'\\)\\)\")",
       "Bash(dir \"C:\\\\Users\\\\geils\\\\Desktop\\\\Crivo Insights\\\\data\\\\niches\")",
       "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:8000/health\" -TimeoutSec 3; Write-Host \"UP: $\\($r.StatusCode\\)\" } catch { Write-Host \"OFFLINE: $_\" })",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "PowerShell(if \\($?\\) { \"OK - sem erros Python\" } else { \"ERRO\" })"
     ]
   }
 }

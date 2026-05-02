@@ -54,7 +54,7 @@
 
 **Métricas:**
 - Total de entrevistas / completas / incompletas
-- Tempo médio de entrevista (via `meta.json` — depende de GSD-002)
+- Tempo médio de entrevista (via `metadata.json` — GSD-002 já implementado)
 - Top 10 termos do glossário
 - Data da última análise
 

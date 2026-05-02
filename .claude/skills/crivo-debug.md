@@ -33,22 +33,36 @@ Player aparece (controles visíveis), mas ao clicar em play:
 - Barra de progresso vazia
 - Áudio/vídeo não toca
 
-### Causas identificadas e status
+### Causa raiz e status
 
 | Causa | Arquivo | Status |
 |-------|---------|--------|
-| CORS sem `expose_headers` → browser não lê `Content-Range` cross-origin → duração = 0 | `backend/api/main.py` | ✅ Corrigido |
-| `FileResponse(filename=...)` → `Content-Disposition: attachment` → browser tenta baixar em vez de stream | `backend/api/main.py` | ✅ Corrigido |
+| **Causa raiz:** Starlette 0.36.3 `FileResponse` sem suporte a Range requests. Browser envia `Range: bytes=0-` para ler header codec e calcular duração. Servidor respondia `200` sem `Accept-Ranges` / `Content-Range` → duração = 0, play bloqueado. | `backend/api/main.py` | ✅ Corrigido |
+| CORS sem `expose_headers` → browser bloqueava leitura de `Content-Range` cross-origin | `backend/api/main.py` | ✅ Corrigido |
+| `FileResponse(filename=...)` → `Content-Disposition: attachment` → browser tentava baixar | `backend/api/main.py` | ✅ Corrigido |
 
-### Fix aplicado (2026-05-01)
+### Fix aplicado (2026-05-01) — Range requests manuais
 
 ```python
-# main.py — CORSMiddleware
-expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", "Content-Disposition"],
+# main.py — gerador de chunks para byte ranges
+def _file_range_generator(path: str, start: int, end: int, chunk: int = 65536):
+    with open(path, "rb") as f:
+        f.seek(start)
+        remaining = end - start + 1
+        while remaining > 0:
+            data = f.read(min(chunk, remaining))
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
 
-# main.py — FileResponse
-content_disposition_type="inline",  # removido filename=filename
+# main.py — serve_media(): sem Range → FileResponse + Accept-Ranges: bytes
+#                           com Range → StreamingResponse 206 + Content-Range
+# CORSMiddleware
+expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", "Content-Disposition"]
 ```
+
+Verificado com PowerShell: WAV (71 MB) e MP3 (26 MB) retornam 206 com `Content-Range` correto.
 
 ### Se ainda não funcionar após o fix
 

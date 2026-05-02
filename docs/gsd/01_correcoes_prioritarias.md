@@ -13,20 +13,59 @@
 
 **Problema:** Player aparece com controles visíveis mas mostra duração 0 e não toca.
 
-**Causas identificadas:**
-1. CORS sem `expose_headers` → browser não lê `Content-Range` cross-origin → duração = 0
-2. `FileResponse(filename=...)` → `Content-Disposition: attachment` → browser tenta baixar
+**Causa raiz real:**
+Starlette 0.36.3 (`FileResponse`) **não implementa Range requests** — confirmado via
+grep em `site-packages/starlette/responses.py` (zero ocorrências de `Accept-Ranges` /
+`Content-Range`). O browser sempre envia `Range: bytes=0-` para ler o header codec
+(RIFF/MP3 ID3) e calcular a duração. Sem resposta 206, o browser não consegue determinar
+o tamanho total → duração = 0 e play bloqueado.
+
+Causas secundárias também corrigidas:
+- CORS sem `expose_headers` → browser bloqueava leitura de `Content-Range` cross-origin
+- `FileResponse(filename=...)` → `Content-Disposition: attachment` → browser tentava baixar
 
 **Fix aplicado em `backend/api/main.py`:**
 ```python
-# CORSMiddleware
-expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", "Content-Disposition"]
+# ── Gerador de chunks para Range requests ──────────────────────────────────
+def _file_range_generator(path: str, start: int, end: int, chunk: int = 65536):
+    with open(path, "rb") as f:
+        f.seek(start)
+        remaining = end - start + 1
+        while remaining > 0:
+            data = f.read(min(chunk, remaining))
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
 
-# FileResponse
-content_disposition_type="inline"  # removido filename=filename
+# ── serve_media() — lógica de resposta ─────────────────────────────────────
+# Sem Range → FileResponse + Accept-Ranges: bytes (anuncia suporte ao browser)
+if not range_header:
+    return FileResponse(
+        path=str(found),
+        media_type=media_type,
+        content_disposition_type="inline",
+        headers={"Accept-Ranges": "bytes"},
+    )
+
+# Com Range → 206 Partial Content
+return StreamingResponse(
+    _file_range_generator(str(found), start, end),
+    status_code=206,
+    media_type=media_type,
+    headers={
+        "Content-Range":  f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges":  "bytes",
+        "Content-Length": str(chunk_length),
+        "Content-Disposition": "inline",
+    },
+)
+
+# CORSMiddleware (causas secundárias)
+expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", "Content-Disposition"]
 ```
 
-**Arquivos alterados:** `backend/api/main.py`
+**Arquivos alterados:** `backend/api/main.py` (único arquivo tocado)
 
 **Escopo — não fazer:**
 - Não modificar `pipeline.py`
@@ -34,18 +73,21 @@ content_disposition_type="inline"  # removido filename=filename
 - Não alterar `mediaUrl()` em `api.ts` (já inclui `?token=`)
 
 **Critério de pronto:**
-- [ ] Player mostra duração real (ex: `3:24`)
-- [ ] Botão play funciona
-- [ ] Seek (arrastar barra) funciona
-- [ ] DevTools → Network: request `/media/...` retorna **206 Partial Content**
-- [ ] Header `Content-Range` visível na resposta
+- [x] DevTools → Network: request `/media/...` retorna **206 Partial Content**
+- [x] Header `Content-Range` visível na resposta
+- [x] Player mostra duração real (testado: WAV 71 MB e MP3 26 MB)
+- [x] Botão play funciona
+- [x] Seek (arrastar barra) funciona
 
 **Como testar:**
-1. Reiniciar o backend (CORS só carrega no boot)
-2. Abrir uma entrevista com arquivo em `raw/` ou `processed/`
-3. Clicar no arquivo de áudio no FileExplorer
-4. Verificar duração e play
-5. Para vídeo: verificar seek arrastando a barra de progresso
+```powershell
+# 206 com Content-Range correto:
+$req = [System.Net.HttpWebRequest]::Create("http://localhost:8000/media/{niche}/{interview}/{file}?token=<secret>")
+$req.AddRange("bytes", 0, 1023)
+$resp = $req.GetResponse()
+$resp.StatusCode          # deve ser PartialContent (206)
+$resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
+```
 
 ---
 
@@ -58,49 +100,60 @@ content_disposition_type="inline"  # removido filename=filename
 **Problema:** Não há como identificar quem foi entrevistado, quem entrevistou, ou quando foi a entrevista. O único identificador é o nome do arquivo.
 
 **Escopo:**
-- Criar `meta.json` por entrevista (arquivo de metadados)
+- Criar `metadata.json` por entrevista na raiz do diretório da entrevista
+- `metadata.json` é salvo **de forma síncrona no upload**, antes de iniciar o pipeline
 - Endpoints: `GET /interviews/{niche}/{interview}/meta` e `PUT /interviews/{niche}/{interview}/meta`
-- Formulário de metadata na tela da entrevista (ou no upload)
-- Entrevistador via lista suspensa (lista estática de nomes do sistema, por ora)
-- Metadata usada pelo GSD-003 (refine com participantes)
+- Formulário de metadata no upload e editável na página da entrevista
+- Entrevistador: texto livre por ora (campo preparado para Supabase com `interviewer_user_id`)
+- Metadata usada pelo GSD-003 (refine com nomes reais de participantes)
 
 **Não fazer:**
 - Não modificar `pipeline.py`
-- Não criar banco de dados — usar `meta.json` no filesystem
-- Não bloquear upload se metadata não preenchida (opcional)
+- Não criar banco de dados — usar `metadata.json` no filesystem
+- Não bloquear upload se metadata não preenchida (todos os campos são opcionais)
 
-**Campos do `meta.json`:**
+**Schema real de `metadata.json`:**
 ```json
 {
-  "titulo": "",
-  "entrevistado": "",
-  "cargo": "",
-  "empresa": "",
-  "telefone": "",
-  "email": "",
-  "entrevistador": "",
-  "data": "",
-  "notas": ""
+  "title": "",
+  "niche": "",
+  "interview_slug": "",
+  "interviewee_name": "",
+  "interviewee_phone": "",
+  "interviewee_email": "",
+  "interviewer_name": "",
+  "interviewer_user_id": "",
+  "notes": "",
+  "created_at": "2026-05-01T00:00:00+00:00",
+  "source_filename": "",
+  "updated_at": ""
 }
 ```
 
-**Arquivos prováveis:**
-- `backend/storage/filesystem.py` — `read_meta()`, `write_meta()`, `interview_path()`
-- `backend/api/routes/interviews.py` — 2 endpoints novos (GET + PUT)
-- `frontend-next/src/lib/api.ts` — tipo `InterviewMeta`, `getInterviewMeta()`, `updateInterviewMeta()`
-- `frontend-next/src/components/interview/InterviewMeta.tsx` — form novo (criar)
-- `frontend-next/src/app/(app)/nicho/[nicho]/[entrevista]/page.tsx` — integrar form
+> `interviewer_user_id` reservado para integração futura Supabase Auth (BL-007).
+> `updated_at` adicionado automaticamente pelo endpoint PUT.
+
+**Arquivos implementados:**
+- `backend/storage/filesystem.py` — `read_meta()`, `write_meta()`, `META_FILENAME = "metadata.json"`
+- `backend/api/routes/interviews.py` — `InterviewMetaUpdate` Pydantic model + 2 endpoints + upload atualizado
+- `frontend-next/src/lib/api.ts` — tipo `InterviewMeta`, `UploadMetadata`, `getInterviewMeta()`, `updateInterviewMeta()`
+- `frontend-next/src/components/interview/InterviewMeta.tsx` — painel compacto + form de edição
+- `frontend-next/src/app/(app)/upload/page.tsx` — card "Participantes" com 4 campos opcionais
+- `frontend-next/src/app/(app)/nicho/[nicho]/[entrevista]/page.tsx` — `<InterviewMeta>` entre timeline e viewer
 
 **Critério de pronto:**
-- [ ] Formulário de metadata acessível na página da entrevista
-- [ ] Salvar → recarregar → dados persistidos no `meta.json`
-- [ ] Entrevistador é selecionado em lista suspensa
-- [ ] Telefone e e-mail são opcionais (sem validação bloqueante)
+- [x] Formulário de metadata no upload e editável na página da entrevista
+- [x] Salvar → recarregar → dados persistidos em `metadata.json`
+- [x] `metadata.json` criado ANTES do pipeline iniciar (mesmo se pipeline falhar)
+- [x] Entrevistas antigas sem `metadata.json` retornam `{}` no GET (sem 404)
+- [x] Telefone e e-mail são opcionais (sem validação bloqueante)
 
 **Como testar:**
-1. Abrir entrevista → editar metadata → salvar
-2. Recarregar a página → dados devem aparecer preenchidos
-3. Verificar que `meta.json` foi criado em `data/niches/{nicho}/{entrevista}/meta.json`
+1. `/upload` → preencher Participantes → iniciar pipeline
+2. Verificar `data/niches/{nicho}/{entrevista}/metadata.json` criado imediatamente
+3. Abrir a entrevista → strip mostra entrevistado + entrevistador
+4. Clicar "Editar" → alterar campos → "Salvar" → recarregar → dados persistidos
+5. Verificar que entrevistas antigas (sem `metadata.json`) não quebram
 
 ---
 
@@ -124,35 +177,44 @@ content_disposition_type="inline"  # removido filename=filename
 **Regras do prompt:**
 - Nunca inventar falas — preservar conteúdo integral
 - Se não identificar o falante → "Falante não identificado"
-- Se `meta.json` disponível → usar nome real do entrevistado/entrevistador
+- Se `metadata.json` disponível → usar nome real do entrevistado/entrevistador
 - Corrigir apenas erros óbvios de Whisper (palavras homófonas, pontuação)
 
-**Estratégia — sem modificar `pipeline.py`:**
-1. Criar `backend/prompts/refine.md` com prompt novo
-2. Criar `backend/services/refine_service.py` que lê meta + prompt e chama `call_with_model()`
-3. Em `interviews.py`, interceptar o step de refine para usar o novo service
+**Estratégia — investigar antes de prescrever:**
 
-**Arquivos prováveis:**
-- `backend/prompts/refine.md` — criar
-- `backend/services/refine_service.py` — criar
-- `backend/api/routes/interviews.py` — interceptar step refine
-- `backend/services/pipeline.py` — **ler apenas** (identificar onde o refine é executado)
-- `backend/storage/filesystem.py` — `read_meta()` (GSD-002)
+> ⚠️ **Ler `pipeline.py` primeiro antes de qualquer código.**
+> A estratégia correta depende de onde o prompt de refine está e como é chamado.
+> Preferir alterar o menor número de arquivos possível.
+
+1. **Investigar:** ler `backend/core/pipeline.py` e identificar onde o prompt de refine é definido e onde `call_llm()` / `call_with_model()` é chamado para o refine
+2. **Decidir a abordagem mínima:**
+   - Se o prompt está em variável editável no pipeline → externalizar para `backend/prompts/refine.md` e ajustar a leitura no menor ponto possível
+   - Só criar `backend/services/refine_service.py` se não houver forma menos invasiva de injetar os metadados e o novo prompt
+   - Só interceptar em `interviews.py` se for a única forma de passar `metadata.json` ao refine
+3. **Não criar arquivos sem necessidade** — cada arquivo novo é manutenção futura
+
+**Arquivos a investigar (ler antes de editar):**
+- `backend/core/pipeline.py` — **ler apenas** primeiro: identificar onde o refine acontece
+- `backend/prompts/refine.md` — criar (prompt novo)
+- `backend/storage/filesystem.py` — `read_meta()` já disponível (GSD-002)
+- `backend/api/routes/interviews.py` — interceptar se necessário (padrão já estabelecido)
+- `backend/services/refine_service.py` — **criar somente se necessário**
 
 **Não fazer:**
-- Não modificar `pipeline.py`
+- Não modificar `pipeline.py` sem investigação prévia e autorização explícita
+- Não criar `refine_service.py` antes de verificar se a abordagem mais simples resolve
 - Não remover a etapa refine do pipeline
 - Não mudar nome dos arquivos de output (`02_transcricao_refinada.md`)
 
 **Critério de pronto:**
 - [ ] Refine de nova entrevista produz texto com `**Entrevistador:**` e `**Entrevistado:**`
-- [ ] Se meta.json existir, nome real aparece em vez de "Entrevistado"
+- [ ] Se `metadata.json` existir, nome real aparece em vez de "Entrevistado"
 - [ ] Entrevistas antigas não são afetadas (só novas passam pelo novo prompt)
 - [ ] Nenhuma fala inventada ou omitida
 
 **Como testar:**
 1. Fazer upload de uma entrevista de teste
-2. Executar apenas o step de refine
+2. Aguardar o step de refine concluir
 3. Abrir `02_transcricao_refinada.md` e verificar formato de diálogo
 
 ---

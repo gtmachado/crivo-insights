@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     api_secret_key: Optional[str] = None
 
     # ── Infra ──────────────────────────────────────────────────────────
-    whisper_model: str = "base"
+    whisper_model: str = "medium"
     audio_chunk_mb: int = 24
     data_dir: Path = Path("./data/niches")
     backend_url: str = "http://localhost:8000"

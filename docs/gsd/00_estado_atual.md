@@ -88,7 +88,7 @@ data/
             │   └── 03_entrevista_estruturada.md   ← doc type "structured"
             └── glossary/
                 └── glossario_local.md             ← doc type "glossary"
-            # meta.json — a criar em GSD-002
+            metadata.json                          ← metadados (GSD-002 ✅)
 ```
 
 ---

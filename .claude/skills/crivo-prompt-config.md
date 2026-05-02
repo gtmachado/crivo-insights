@@ -66,20 +66,22 @@ O prompt de refine atual produz texto corrido. O novo deve formatar como diálog
 ### Regras do novo prompt
 - Nunca inventar falas ou trocar de falante por dedução
 - Se não conseguir identificar quem fala, usar "Falante não identificado"
-- Se `meta.json` disponível, usar nome real: `**João Silva (entrevistado):**`
+- Se `metadata.json` disponível, usar nome real: `**João Silva (entrevistado):**`
 - Preservar conteúdo integral — nenhuma fala omitida, apenas formatada
 - Corrigir apenas erros de transcrição óbvios (Whisper confunde palavras semelhantes)
 
-### Estratégia sem modificar `pipeline.py`
+### Estratégia — investigar antes de prescrever
 
-1. Criar `backend/prompts/refine.md` com o novo prompt
-2. Identificar onde `pipeline.py` constrói o prompt de refine (ler o arquivo primeiro)
-3. Criar wrapper em `backend/services/refine_service.py` que:
-   - Lê `meta.json` da entrevista
-   - Lê `backend/prompts/refine.md`
-   - Injeta nome do entrevistado/entrevistador no prompt
-   - Chama `call_with_model()` com Sonnet 4.6 diretamente
-4. `interviews.py` usa esse wrapper antes/ao invés do step do pipeline
+> ⚠️ **Ler `pipeline.py` primeiro.** A abordagem correta depende de como o refine está implementado.
+
+1. **Investigar:** ler `backend/core/pipeline.py` — onde está o prompt de refine? Como é chamado?
+2. **Preferir a solução mínima:**
+   - Se o prompt é uma variável editável: externalizar para `backend/prompts/refine.md` com o menor patch possível
+   - Injetar `metadata.json` no ponto mais próximo onde o prompt é construído
+3. **Só criar `refine_service.py` se necessário** — wrapper separado somente quando não há forma menos invasiva
+4. **Não modificar `pipeline.py`** sem investigação prévia e autorização explícita
+
+`read_meta()` já está disponível em `filesystem.py` (implementado no GSD-002).
 
 ---
 

@@ -68,7 +68,7 @@ def run_pipeline(
 
     # 6. Refinar
     on_step("Refinando transcrição com Claude...")
-    refined_text = refine_transcription(raw_text)
+    refined_text = refine_transcription(raw_text, niche=niche, interview_name=interview_name)
     refined_md = _header("Transcrição Refinada", niche, interview_name) + refined_text
     refined_path = base / "outputs" / "02_transcricao_refinada.md"
     save_markdown(refined_path, refined_md)

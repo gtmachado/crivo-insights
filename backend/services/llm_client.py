@@ -31,13 +31,13 @@ logging.basicConfig(
 # ─── Defaults por tarefa ───────────────────────────────────────────────────────
 # Modelos gratuitos ou baratos do OpenRouter (abril 2025)
 _OPENROUTER_DEFAULTS: dict[str, str] = {
-    # Tarefas leves — Gemini 2.5 Flash Lite (rápido, barato, 1M ctx)
-    "refine":               "google/gemini-2.5-flash-lite",
-    "glossary":             "google/gemini-2.5-flash-lite",
-    "consolidate_glossary": "google/gemini-2.5-flash-lite",
-    # Tarefas críticas — Gemini 2.5 Flash (melhor custo/qualidade do Google, 1M ctx)
-    "structure":            "google/gemini-2.5-flash",
-    "consolidate":          "google/gemini-2.5-flash",
+    # Todas as etapas LLM usam Sonnet 4.6 para máxima qualidade de transcrição e análise.
+    # Para reduzir custo, sobrescreva via .env: model_refine, model_glossary, etc.
+    "refine":               "anthropic/claude-sonnet-4.6",
+    "glossary":             "anthropic/claude-sonnet-4.6",
+    "consolidate_glossary": "anthropic/claude-sonnet-4.6",
+    "structure":            "anthropic/claude-sonnet-4.6",
+    "consolidate":          "anthropic/claude-sonnet-4.6",
 }
 
 # Modelos que NÃO suportam system prompt separado (ex: Gemma via Google AI Studio)
@@ -61,11 +61,11 @@ _GEMINI_DEFAULTS: dict[str, str] = {
 }
 
 _ANTHROPIC_DEFAULTS: dict[str, str] = {
-    "refine":               "claude-haiku-4-5",
-    "glossary":             "claude-haiku-4-5",
-    "structure":            "claude-sonnet-4-5",
-    "consolidate":          "claude-sonnet-4-5",
-    "consolidate_glossary": "claude-haiku-4-5",
+    "refine":               "claude-sonnet-4-6",
+    "glossary":             "claude-sonnet-4-6",
+    "structure":            "claude-sonnet-4-6",
+    "consolidate":          "claude-sonnet-4-6",
+    "consolidate_glossary": "claude-sonnet-4-6",
 }
 
 _MAX_TOKENS = 8192

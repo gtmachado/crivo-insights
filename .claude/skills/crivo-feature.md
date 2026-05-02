@@ -85,34 +85,36 @@ cd frontend-next; npm run build
 
 ## Guia por Bloco GSD
 
-### GSD-002 — Metadata de Entrevista
+### GSD-002 — Metadata de Entrevista ✅ Concluído (2026-05-01)
 
-**O que construir:**
-1. Backend: `meta.json` por entrevista (criar, ler, salvar)
+**O que foi construído:**
+1. Backend: `metadata.json` por entrevista — salvo de forma síncrona no upload
 2. Backend: `GET /interviews/{niche}/{interview}/meta` + `PUT /interviews/{niche}/{interview}/meta`
-3. Backend: passar `entrevistador` do meta para o prompt de refine
-4. Frontend: formulário de metadata no modal/tela de upload
-5. Frontend: lista de entrevistadores (usuários do sistema — lista estática por ora)
+3. Frontend: card "Participantes" no upload + painel `InterviewMeta` na entrevista
 
-**Campos do `meta.json`:**
+**Schema real de `metadata.json`:**
 ```json
 {
-  "titulo": "Nome do arquivo/entrevista",
-  "entrevistado": "Nome completo",
-  "cargo": "Cargo/função",
-  "empresa": "Empresa",
-  "telefone": "",
-  "email": "",
-  "entrevistador": "Nome do entrevistador",
-  "data": "YYYY-MM-DD",
-  "notas": ""
+  "title": "",
+  "niche": "",
+  "interview_slug": "",
+  "interviewee_name": "",
+  "interviewee_phone": "",
+  "interviewee_email": "",
+  "interviewer_name": "",
+  "interviewer_user_id": "",
+  "notes": "",
+  "created_at": "2026-05-01T00:00:00+00:00",
+  "source_filename": "",
+  "updated_at": ""
 }
 ```
+> `interviewer_user_id` reservado para Supabase Auth (BL-007). Campo no form é texto livre.
 
-**Arquivos prováveis:**
-- `backend/storage/filesystem.py` — `read_meta()`, `write_meta()`
-- `backend/api/routes/interviews.py` — 2 endpoints novos
-- `frontend-next/src/lib/api.ts` — tipos + funções
+**Arquivos implementados:**
+- `backend/storage/filesystem.py` — `read_meta()`, `write_meta()`, `META_FILENAME`
+- `backend/api/routes/interviews.py` — `InterviewMetaUpdate` + endpoints + upload
+- `frontend-next/src/lib/api.ts` — `InterviewMeta`, `UploadMetadata`, funções
 - `frontend-next/src/components/interview/InterviewMeta.tsx` — form novo
 
 ---
@@ -126,17 +128,20 @@ cd frontend-next; npm run build
    **Entrevistado:** [fala]
    **Falante não identificado:** [fala]
    ```
-2. O prompt DEVE injetar os nomes reais do `meta.json` quando disponíveis
+2. O prompt DEVE injetar os nomes reais do `metadata.json` quando disponíveis
 3. Nunca inventar falas — se não souber o falante, usar "Falante não identificado"
 
-**Atenção:** O prompt de refine está em `pipeline.py`. Não modificar `pipeline.py`.
-Estratégia: extrair o prompt para `backend/prompts/refine.md` e ajustar a leitura
-no service que chama pipeline, ou criar wrapper service que injeta os metadados.
+**Atenção — investigar antes de prescrever:**
+O prompt de refine está em `pipeline.py`. **Ler o arquivo primeiro** para entender
+onde está e como é chamado. Preferir a solução com menor número de arquivos novos.
+Só criar `refine_service.py` se não houver alternativa menos invasiva.
 
-**Arquivos prováveis:**
+**Arquivos a investigar (ler antes de editar):**
+- `backend/core/pipeline.py` — **ler apenas**: onde está o prompt de refine?
 - `backend/prompts/refine.md` — criar com prompt novo
-- `backend/services/pipeline.py` — **ler apenas**, identificar onde o prompt é usado
-- `backend/api/routes/interviews.py` — interceptar para injetar meta antes do refine
+- `backend/storage/filesystem.py` — `read_meta()` já disponível (lê `metadata.json`)
+- `backend/api/routes/interviews.py` — interceptar se necessário
+- `backend/services/refine_service.py` — criar **somente se necessário**
 
 ---
 
