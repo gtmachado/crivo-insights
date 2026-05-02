@@ -221,6 +221,34 @@ def write_meta(niche: str, interview_name: str, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# ── Configuração de modelos ───────────────────────────────────────────────────
+
+def _model_config_path() -> Path:
+    """data/config/models.json — runtime local, não versionado."""
+    return settings.data_dir.parent / "config" / "models.json"
+
+
+def read_model_config() -> dict[str, str]:
+    """
+    Lê modelos salvos via UI em data/config/models.json.
+    Retorna {} se o arquivo não existir — usa os defaults do código.
+    """
+    path = _model_config_path()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_model_config(data: dict[str, str]) -> None:
+    """Salva configuração de modelos em data/config/models.json."""
+    path = _model_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def glossary_docs_for_niche(niche: str) -> list[tuple[str, str]]:
     """(nome_entrevista, conteúdo) de todos os glossario_local.md do nicho."""
     niche_dir = settings.data_dir / _slugify(niche)
