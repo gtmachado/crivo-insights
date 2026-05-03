@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getApiUrl, getApiSecret, setApiConfig, getSystemStatus } from "@/lib/api";
 import { ModelSettings } from "@/components/settings/ModelSettings";
+import { PromptSettings } from "@/components/settings/PromptSettings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -143,6 +144,9 @@ export default function SettingsPage() {
 
       {/* GSD-004 — Modelos de IA por etapa */}
       <ModelSettings />
+
+      {/* GSD-005 — Prompts do sistema */}
+      <PromptSettings />
     </div>
   );
 }

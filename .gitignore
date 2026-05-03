@@ -28,6 +28,10 @@ data/test_niches/
 data/test_input/
 data/_tmp/
 
+# ── Prompts — backups e defaults locais (gerados em runtime) ──────────────────
+backend/prompts/_backups/
+backend/prompts/_defaults/
+
 # ── IDE / OS ──────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
