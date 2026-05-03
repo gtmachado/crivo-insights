@@ -36,10 +36,9 @@ _DOC_MAP = {
     "glossary":   ("glossary", "glossario_local.md"),
 }
 
-# Apenas os 3 docs de transcrição/análise são editáveis. O glossário local é
-# regenerado pelo pipeline e não deve ser editado à mão (se editar, a próxima
-# rodada do pipeline sobrescreve).
-_EDITABLE_DOCS = {"raw", "refined", "structured"}
+# Docs editáveis via PUT. O glossário local também é editável; uma nova rodada
+# do pipeline sobrescreve o arquivo — o usuário está ciente disso.
+_EDITABLE_DOCS = {"raw", "refined", "structured", "glossary"}
 
 
 class DocUpdate(BaseModel):

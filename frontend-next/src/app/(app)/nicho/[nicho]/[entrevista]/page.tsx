@@ -22,8 +22,8 @@ import {
   stagesFromInterview,
   slugify,
 } from "@/lib/pipeline";
+import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { GlossaryPanel } from "@/components/glossary/GlossaryPanel";
 import { MarkdownPreview } from "@/components/markdown/MarkdownPreview";
 import { MarkdownEditor } from "@/components/editor/MarkdownEditor";
 import { MediaPlayer } from "@/components/media/MediaPlayer";
@@ -32,10 +32,10 @@ import { InterviewHeader } from "@/components/interview/InterviewHeader";
 import { InterviewMeta } from "@/components/interview/InterviewMeta";
 import { DeleteInterviewDialog } from "@/components/interview/DeleteInterviewDialog";
 import { PipelineTimeline } from "@/components/pipeline/PipelineTimeline";
-import { Loader2, FileText, FolderOpen } from "lucide-react";
+import { Loader2, FileText, FolderOpen, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
-const EDITABLE_DOCS: readonly DocType[] = ["raw", "refined", "structured"];
+const EDITABLE_DOCS: readonly DocType[] = ["raw", "refined", "structured", "glossary"];
 
 /**
  * Fallback de auto-abertura ao entrar na página: prioriza o markdown mais
@@ -90,15 +90,6 @@ export default function EntrevistaPage() {
       }
     }
   }, [currentFile, filesQuery.data, setCurrentFile]);
-
-  // ── Glossário (painel direito — independente do currentFile) ───────────────
-
-  const { data: glossaryMd } = useQuery({
-    queryKey: ["doc", niche, interview, "glossary"],
-    queryFn: () => getDocument(niche, interview, "glossary"),
-    staleTime: 5 * 60_000,
-    retry: false,
-  });
 
   // ── Pipeline timeline ──────────────────────────────────────────────────────
   // Duas fontes de verdade:
@@ -348,25 +339,21 @@ export default function EntrevistaPage() {
         {/* Metadata da entrevista (entrevistado, entrevistador, etc.) */}
         <InterviewMeta niche={niche} interview={interview} />
 
-        <div className="flex-1 min-h-0 overflow-hidden">{renderViewer()}</div>
-      </div>
-
-      {/* Direita: glossário (pinned) */}
-      <aside className="w-64 shrink-0 flex flex-col overflow-hidden bg-background/30 backdrop-blur-sm">
-        {glossaryMd ? (
-          <GlossaryPanel
-            markdown={glossaryMd}
-            glossarioFullHref={`/nicho/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/glossario`}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-2 p-4">
-            <FileText className="h-6 w-6 text-muted-foreground/40" />
-            <p className="text-xs text-muted-foreground text-center">
-              Glossário ainda não gerado para esta entrevista.
-            </p>
+        {/* Link para o glossário completo — visível quando o arquivo existe */}
+        {filesQuery.data?.glossary?.some((f) => f.name === "glossario_local.md") && (
+          <div className="shrink-0 px-1 pb-1">
+            <Link
+              href={`/nicho/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/glossario`}
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Ver glossário da entrevista
+            </Link>
           </div>
         )}
-      </aside>
+
+        <div className="flex-1 min-h-0 overflow-hidden">{renderViewer()}</div>
+      </div>
 
       {/* Delete dialog */}
       <DeleteInterviewDialog

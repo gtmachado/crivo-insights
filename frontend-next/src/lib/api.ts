@@ -177,7 +177,7 @@ export const getAllJobs = () =>
 // ── Documentos ────────────────────────────────────────────────────────────────
 
 export type DocType = "raw" | "refined" | "structured" | "glossary";
-export type EditableDocType = Exclude<DocType, "glossary">;
+export type EditableDocType = DocType;
 
 export const getDocument = (niche: string, interview: string, doc: DocType) =>
   api
