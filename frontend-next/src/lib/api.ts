@@ -333,6 +333,37 @@ export const getModelConfig = () =>
 export const updateModelConfig = (data: ModelConfigUpdate) =>
   api.put<{ ok: boolean }>("/config/models", data).then((r) => r.data);
 
+// ── Configuração de prompts (GSD-005) ─────────────────────────────────────────
+
+export type PromptInfo = {
+  name: string;
+  label: string;
+  filename: string;
+  has_default: boolean;
+};
+
+export type PromptContent = {
+  name: string;
+  content: string;
+  has_default: boolean;
+};
+
+export const getPrompts = () =>
+  api.get<PromptInfo[]>("/config/prompts").then((r) => r.data);
+
+export const getPrompt = (name: string) =>
+  api.get<PromptContent>(`/config/prompts/${encodeURIComponent(name)}`).then((r) => r.data);
+
+export const updatePrompt = (name: string, content: string) =>
+  api
+    .put<{ ok: boolean }>(`/config/prompts/${encodeURIComponent(name)}`, { content })
+    .then((r) => r.data);
+
+export const restorePrompt = (name: string) =>
+  api
+    .post<{ ok: boolean; restored: boolean }>(`/config/prompts/${encodeURIComponent(name)}/restore`)
+    .then((r) => r.data);
+
 /**
  * URL para o endpoint /media. Inclui o token como query param porque tags
  * <audio>/<video>/<source> não enviam o header Authorization. O backend
