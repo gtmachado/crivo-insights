@@ -1,8 +1,8 @@
 # GSD-00 — Estado Atual do Crivo Insights
 
-> Última atualização: 2026-05-01
+> Última atualização: 2026-05-03
 > Build: limpo (12 rotas Next.js, 0 erros TypeScript, 0 erros Python)
-> Status: **Fases 0–4 concluídas. Fase 5 pausada até GSD-001–008 serem resolvidos.**
+> Status: **Fases 0–4 concluídas. GSD-001–006 concluídos. GSD-007–008 pendentes. Fase 5 pausada.**
 
 ---
 
@@ -58,10 +58,10 @@ Os itens abaixo foram identificados após as Fases 0–4 e estão documentados e
 |-----|--------|--------|
 | GSD-001 | Player de mídia (duração 0, não toca) | ✅ Concluído |
 | GSD-002 | Metadata de entrevista | ✅ Concluído |
-| GSD-003 | Refine com separação de participantes | ⬜ Pendente |
-| GSD-004 | Configurações de modelos via UI | ⬜ Pendente |
-| GSD-005 | Configurações de prompts editáveis | ⬜ Pendente |
-| GSD-006 | Ajuste de glossário | ⬜ Pendente |
+| GSD-003 | Refine com separação de participantes | ✅ Concluído |
+| GSD-004 | Configurações de modelos via UI | ✅ Concluído |
+| GSD-005 | Configurações de prompts editáveis | ✅ Concluído |
+| GSD-006 | Ajuste de glossário | ✅ Concluído |
 | GSD-007 | Tema/fundo/light mode | ⬜ Pendente |
 | GSD-008 | Limpeza da análise de nicho | ⬜ Pendente |
 
@@ -102,7 +102,7 @@ data/
 | POST | `/interviews/upload` | Upload + início do pipeline |
 | GET | `/interviews/status/{job_id}` | Status do job com stages[] detalhados |
 | GET | `/interviews/{niche}/{interview}/{doc}` | Ler documento |
-| PUT | `/interviews/{niche}/{interview}/{doc}` | Salvar documento (raw/refined/structured) |
+| PUT | `/interviews/{niche}/{interview}/{doc}` | Salvar documento (raw/refined/structured/glossary) |
 | GET | `/interviews/{niche}/{interview}/files` | Listar arquivos da entrevista (FileExplorer) |
 | DELETE | `/interviews/{niche}/{interview}` | Excluir entrevista |
 
@@ -123,6 +123,16 @@ data/
 |--------|------|-----------|
 | GET | `/status` | Status do sistema, modelos configurados |
 | GET | `/media/{niche}/{interview}/{filename}` | Servir mídia com Range support |
+
+### Configuração
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/config/models` | Ler configuração de modelos por etapa |
+| PUT | `/config/models` | Salvar configuração de modelos |
+| GET | `/config/prompts` | Listar prompts editáveis com metadados |
+| GET | `/config/prompts/{name}` | Ler conteúdo de um prompt |
+| PUT | `/config/prompts/{name}` | Salvar prompt editado (com backup automático) |
+| POST | `/config/prompts/{name}/restore` | Restaurar prompt ao estado de fábrica |
 
 ---
 

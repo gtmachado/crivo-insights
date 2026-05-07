@@ -49,10 +49,13 @@ Operar o Crivo Insights com o menor custo possível de tokens, sem degradar qual
 
 ---
 
+## Otimizações Já Implementadas (GSD concluídos)
+
+- [x] Configuração de modelo por etapa via UI (GSD-004) ✅ — Haiku disponível para glossary
+- [x] Configuração de prompts via UI (GSD-005) ✅ — editar prompts sem reiniciar servidor
+
 ## Otimizações Pendentes (ver GSD)
 
-- [ ] Configuração de modelo por etapa via UI (GSD-004) — permitir Haiku para glossary
-- [ ] Configuração de prompts via UI (GSD-005) — evitar prompts muito longos
 - [ ] Seleção on-demand para análise de nicho (GSD-008) — menos tokens por não pré-carregar
 
 ---
