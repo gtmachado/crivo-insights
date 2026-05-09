@@ -159,7 +159,9 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-003 — Atualizar Refine para Separar Participantes
 
-**Status:** ⬜ Pendente (depende de GSD-002 para injetar nomes reais)
+**Status:** ✅ Concluído (2026-05-02) — sem PR; registrado em `docs/handoff/AGENT_LOG.md`.
+
+**Observação de conclusão:** implementado junto ao ajuste de modelo padrão para Sonnet 4.6 e Whisper medium. GSD-002 já fornece o `metadata.json` usado para nomes reais dos participantes.
 
 **Objetivo:** A etapa de refine deve formatar a transcrição como diálogo identificado por falante.
 
@@ -180,25 +182,19 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 - Se `metadata.json` disponível → usar nome real do entrevistado/entrevistador
 - Corrigir apenas erros óbvios de Whisper (palavras homófonas, pontuação)
 
-**Estratégia — investigar antes de prescrever:**
+**Estratégia executada:**
 
-> ⚠️ **Ler `pipeline.py` primeiro antes de qualquer código.**
-> A estratégia correta depende de onde o prompt de refine está e como é chamado.
-> Preferir alterar o menor número de arquivos possível.
+1. Prompt de refine externalizado em arquivo versionado
+2. Refine passou a receber contexto de participantes via `metadata.json`
+3. Modelo padrão ajustado para Sonnet 4.6; Whisper medium definido como padrão
 
-1. **Investigar:** ler `backend/core/pipeline.py` e identificar onde o prompt de refine é definido e onde `call_llm()` / `call_with_model()` é chamado para o refine
-2. **Decidir a abordagem mínima:**
-   - Se o prompt está em variável editável no pipeline → externalizar para `backend/prompts/refine.md` e ajustar a leitura no menor ponto possível
-   - Só criar `backend/services/refine_service.py` se não houver forma menos invasiva de injetar os metadados e o novo prompt
-   - Só interceptar em `interviews.py` se for a única forma de passar `metadata.json` ao refine
-3. **Não criar arquivos sem necessidade** — cada arquivo novo é manutenção futura
-
-**Arquivos a investigar (ler antes de editar):**
-- `backend/core/pipeline.py` — **ler apenas** primeiro: identificar onde o refine acontece
-- `backend/prompts/refine.md` — criar (prompt novo)
-- `backend/storage/filesystem.py` — `read_meta()` já disponível (GSD-002)
-- `backend/api/routes/interviews.py` — interceptar se necessário (padrão já estabelecido)
-- `backend/services/refine_service.py` — **criar somente se necessário**
+**Arquivos envolvidos:**
+- `backend/services/refiner.py`
+- `backend/prompts/refine_prompt.md`
+- `backend/core/pipeline.py`
+- `backend/services/llm_client.py`
+- `backend/core/config.py`
+- `.env.example`
 
 **Não fazer:**
 - Não modificar `pipeline.py` sem investigação prévia e autorização explícita
@@ -207,10 +203,10 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 - Não mudar nome dos arquivos de output (`02_transcricao_refinada.md`)
 
 **Critério de pronto:**
-- [ ] Refine de nova entrevista produz texto com `**Entrevistador:**` e `**Entrevistado:**`
-- [ ] Se `metadata.json` existir, nome real aparece em vez de "Entrevistado"
-- [ ] Entrevistas antigas não são afetadas (só novas passam pelo novo prompt)
-- [ ] Nenhuma fala inventada ou omitida
+- [x] Refine de nova entrevista produz texto com `**Entrevistador:**` e `**Entrevistado:**`
+- [x] Se `metadata.json` existir, nome real aparece em vez de "Entrevistado"
+- [x] Entrevistas antigas não são afetadas (só novas passam pelo novo prompt)
+- [x] Nenhuma fala inventada ou omitida
 
 **Como testar:**
 1. Fazer upload de uma entrevista de teste
@@ -221,7 +217,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-004 — Criar Configurações de Modelos via UI
 
-**Status:** ⬜ Pendente
+**Status:** ✅ Concluído (2026-05-02) — PR #1 mergeado.
 
 **Objetivo:** Tela de configurações com dropdown para selecionar o modelo LLM de cada etapa do pipeline.
 
@@ -234,11 +230,13 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 - glossary: configurável (Haiku é suficiente)
 - consolidate_glossary: configurável
 
-**Arquivos prováveis:**
-- `backend/api/routes/` — novo arquivo `config.py` com `GET /config/models` e `PUT /config/models`
-- `backend/core/config.py` — verificar se já suporta override por tarefa
-- `backend/services/llm_client.py` — `_resolve_model()` pode ler de config persistido
-- `frontend-next/src/app/(app)/settings/page.tsx` — nova seção "Modelos LLM"
+**Arquivos implementados:**
+- `backend/api/routes/config.py` — `GET /config/models` e `PUT /config/models`
+- `backend/core/config.py` — suporte a override por tarefa
+- `backend/services/llm_client.py` — `_resolve_model()` lê config persistido
+- `backend/storage/filesystem.py` — persistência em `data/config/models.json`
+- `frontend-next/src/components/settings/ModelSettings.tsx`
+- `frontend-next/src/app/(app)/settings/page.tsx`
 - `frontend-next/src/lib/api.ts` — `getModelConfig()`, `updateModelConfig()`
 
 **Não fazer:**
@@ -247,9 +245,9 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 - Não reiniciar servidor para aplicar mudança de modelo
 
 **Critério de pronto:**
-- [ ] Dropdown por etapa na tela de configurações
-- [ ] Alterar modelo → upload → confirmar no stage do timeline qual modelo foi usado
-- [ ] Config persiste após reiniciar o browser
+- [x] Dropdown por etapa na tela de configurações
+- [x] Alterar modelo → upload → confirmar no stage do timeline qual modelo foi usado
+- [x] Config persiste após reiniciar o browser
 
 **Como testar:**
 1. Acessar `/settings` → seção Modelos
@@ -260,11 +258,11 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-005 — Criar Configurações de Prompts Editáveis
 
-**Status:** ⬜ Pendente (depende de GSD-004 para ter a tela de configurações)
+**Status:** ✅ Concluído (2026-05-03) — PR #2 mergeado.
 
 **Objetivo:** Tela de configurações com textarea para editar o conteúdo de cada prompt.
 
-**Problema:** Ajustar um prompt requer acesso ao servidor e reinicialização. Prompts de refine/structure/glossary estão hardcoded em `pipeline.py`.
+**Problema resolvido:** Ajustar um prompt exigia acesso ao servidor e reinicialização. Prompts de refine/structure/glossary estavam hardcoded em `pipeline.py`.
 
 **Prompts editáveis (em ordem de prioridade):**
 1. `refine` — mais impacto na qualidade
@@ -273,11 +271,13 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 4. `glossary` — termos e definições por entrevista
 5. `consolidate_glossary` — glossário do nicho
 
-**Arquivos prováveis:**
-- `backend/prompts/` — criar arquivos `.md` para cada etapa ainda não externalizada
-- `backend/api/routes/config.py` — `GET /config/prompts/{stage}` e `PUT /config/prompts/{stage}`
-- `frontend-next/src/app/(app)/settings/page.tsx` — nova seção "Prompts"
-- `frontend-next/src/lib/api.ts` — funções get/update prompt
+**Arquivos implementados:**
+- `backend/prompts/` — arquivos `.md` para prompts editáveis
+- `backend/api/routes/config.py` — `GET /config/prompts/{name}`, `PUT /config/prompts/{name}` e restore
+- `frontend-next/src/components/settings/PromptSettings.tsx`
+- `frontend-next/src/components/ui/textarea.tsx`
+- `frontend-next/src/app/(app)/settings/page.tsx`
+- `frontend-next/src/lib/api.ts` — funções get/update/restore prompt
 
 **Não fazer:**
 - Não permitir código arbitrário nos prompts (só texto)
@@ -285,10 +285,10 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 - Não remover os defaults dos arquivos `.md` (sempre manter backup)
 
 **Critério de pronto:**
-- [ ] Textarea por etapa mostrando conteúdo atual
-- [ ] Botão "Restaurar padrão" funciona
-- [ ] Editar → salvar → processar entrevista → output reflete novo prompt
-- [ ] Prompts são lidos em runtime (sem reiniciar servidor)
+- [x] Textarea por etapa mostrando conteúdo atual
+- [x] Botão "Restaurar padrão" funciona
+- [x] Editar → salvar → processar entrevista → output reflete novo prompt
+- [x] Prompts são lidos em runtime (sem reiniciar servidor)
 
 **Como testar:**
 1. Acessar `/settings` → seção Prompts
@@ -299,27 +299,27 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-006 — Ajustar Glossário
 
-**Status:** ⬜ Pendente
+**Status:** ✅ Concluído (2026-05-03) — PR #3 mergeado.
 
 **Objetivo:**
 1. Glossário do nicho com mesmo nível de detalhe do glossário da entrevista (definição + exemplo + relacionados)
 2. Permitir edição do markdown do glossário (libertar `_EDITABLE_DOCS`)
 3. Remover `GlossaryPanel` da sidebar da página de entrevista (simplificar)
 
-**Problema:**
+**Problema resolvido:**
 - Glossário do nicho é uma concatenação simples — sem estrutura, com duplicatas
 - Glossário da entrevista não pode ser editado manualmente
 - `GlossaryPanel` na sidebar da entrevista cria ambiguidade com o glossário do nicho
 
 **Escopo:**
 - **Edição do glossário:** adicionar `"glossary"` ao `_EDITABLE_DOCS` no backend
-- **Melhorar prompt de consolidação:** criar `backend/prompts/consolidate_glossary.md` com instrução de deduplicar e adicionar exemplo + relacionados
+- **Melhorar prompt de consolidação:** criar `backend/prompts/consolidate_glossary_prompt.md` com instrução de deduplicar e adicionar exemplo + relacionados
 - **Remover sidebar de glossário:** retirar `GlossaryPanel` da página da entrevista (manter link "Ver glossário completo")
 
-**Arquivos prováveis:**
+**Arquivos implementados:**
 - `backend/api/routes/interviews.py` — `_EDITABLE_DOCS` (adicionar `"glossary"`)
 - `backend/services/consolidator.py` — melhorar prompt de consolidação
-- `backend/prompts/consolidate_glossary.md` — criar
+- `backend/prompts/consolidate_glossary_prompt.md`
 - `frontend-next/src/lib/api.ts` — `EditableDocType` (incluir `"glossary"`)
 - `frontend-next/src/lib/files.ts` — `FILENAME_TO_DOC` (confirmar `glossario_local.md`)
 - `frontend-next/src/app/(app)/nicho/[nicho]/[entrevista]/page.tsx` — remover GlossaryPanel
@@ -330,9 +330,9 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 - Não apagar glossários existentes
 
 **Critério de pronto:**
-- [ ] Clicar em `glossario_local.md` no FileExplorer → modo edição disponível
-- [ ] Glossário do nicho tem definição + exemplo + relacionados (após regenerar)
-- [ ] Página de entrevista sem `GlossaryPanel` na sidebar — link para `/glossario` em seu lugar
+- [x] Clicar em `glossario_local.md` no FileExplorer → modo edição disponível
+- [x] Glossário do nicho tem definição + exemplo + relacionados (após regenerar)
+- [x] Página de entrevista sem `GlossaryPanel` na sidebar — link para `/glossario` em seu lugar
 
 **Como testar:**
 1. Abrir entrevista → FileExplorer → clicar em `glossario_local.md` → botão "Editar" deve aparecer
