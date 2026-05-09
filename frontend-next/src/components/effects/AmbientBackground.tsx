@@ -1,12 +1,52 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  readVisualPreferences,
+  prefersReducedMotion,
+  VISUAL_PREFERENCES_EVENT,
+  type VisualPreferences,
+} from "@/lib/visual-preferences";
+import { cn } from "@/lib/utils";
+
 /**
  * Fundo ambiente com 3 "blobs" gaussianos que flutuam lentamente.
- * - 100% CSS, sem JS de animação (usa keyframes definidos em globals.css)
+ * - CSS keyframes definidos em globals.css
  * - z-index: 0 com pointer-events:none → não interfere em cliques
- * - Respeita prefers-reduced-motion (regra global em globals.css pausa as anims)
+ * - Respeita prefers-reduced-motion e preferências locais
  *
  * Use UMA única instância no nível do (app) layout, atrás do conteúdo.
  */
 export function AmbientBackground() {
+  const [preferences, setPreferences] = useState<VisualPreferences | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    function syncPreferences() {
+      setPreferences(readVisualPreferences());
+      setReducedMotion(prefersReducedMotion());
+    }
+
+    syncPreferences();
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    mediaQuery.addEventListener("change", syncPreferences);
+    window.addEventListener("storage", syncPreferences);
+    window.addEventListener(VISUAL_PREFERENCES_EVENT, syncPreferences);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncPreferences);
+      window.removeEventListener("storage", syncPreferences);
+      window.removeEventListener(VISUAL_PREFERENCES_EVENT, syncPreferences);
+    };
+  }, []);
+
+  if (!preferences || preferences.visualMode === "simple" || reducedMotion) {
+    return null;
+  }
+
+  const motionEnabled = preferences.backgroundMotion;
+
   return (
     <div
       aria-hidden
@@ -14,18 +54,27 @@ export function AmbientBackground() {
     >
       {/* Blob 1 — primary, topo-esquerdo */}
       <div
-        className="ambient-blob ambient-blob-a"
-        style={{ top: "-12%", left: "-8%", width: "55vw", height: "55vw" }}
+        className={cn(
+          "ambient-blob ambient-blob-a",
+          motionEnabled && "ambient-blob-motion-a",
+        )}
+        style={{ top: "-22%", left: "-14%", width: "64vw", height: "64vw" }}
       />
-      {/* Blob 2 — accent (roxo), centro-direita */}
+      {/* Blob 2 — accent (roxo), inferior-direito */}
       <div
-        className="ambient-blob ambient-blob-b"
-        style={{ top: "20%", right: "-12%", width: "60vw", height: "60vw" }}
+        className={cn(
+          "ambient-blob ambient-blob-b",
+          motionEnabled && "ambient-blob-motion-b",
+        )}
+        style={{ right: "-18%", bottom: "-24%", width: "62vw", height: "62vw" }}
       />
-      {/* Blob 3 — azul claro, base */}
+      {/* Blob 3 — azul claro, eixo central deslocado */}
       <div
-        className="ambient-blob ambient-blob-c"
-        style={{ bottom: "-20%", left: "20%", width: "50vw", height: "50vw" }}
+        className={cn(
+          "ambient-blob ambient-blob-c",
+          motionEnabled && "ambient-blob-motion-c",
+        )}
+        style={{ top: "26%", left: "34%", width: "42vw", height: "42vw" }}
       />
 
       {/* Camada de "vinheta" sutil pra não saturar nas bordas */}
