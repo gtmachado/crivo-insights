@@ -54,9 +54,9 @@ export function NicheAnalysisTab({
             </>
           ) : (
             <>
-              Selecione ao menos uma entrevista marcando o checkbox à esquerda
-              e depois clique em{" "}
+              Clique em{" "}
               <strong className="text-foreground">Analisar nicho</strong>.
+              Você poderá escolher as entrevistas estruturadas antes de iniciar.
             </>
           )}
         </p>
