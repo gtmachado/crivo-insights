@@ -10,9 +10,12 @@ import {
   consolidateGlossary,
   getConsolidatedInsights,
   getConsolidatedGlossary,
+  type Interview,
 } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { GlossaryPanel } from "@/components/glossary/GlossaryPanel";
 import { MarkdownPreview } from "@/components/markdown/MarkdownPreview";
@@ -20,7 +23,7 @@ import { AnalyzeNicheButton } from "@/components/niche/AnalyzeNicheButton";
 import { NicheAnalysisTab } from "@/components/niche/NicheAnalysisTab";
 import {
   Loader2, FileText, CheckCircle2, Clock, Sparkles, BookOpen,
-  ChevronRight, AlertCircle, Brain,
+  ChevronRight, AlertCircle, Brain, ListChecks, Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +57,7 @@ function ConsolidateButton({
     <button
       onClick={onClick}
       disabled={isPending}
-      className="flex items-center gap-2 rounded-md border border-border bg-accent/20 hover:bg-accent px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      className="flex items-center gap-2 rounded-md border border-border bg-background hover:bg-accent px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {isPending ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -134,6 +137,7 @@ export default function NichoPage() {
 
   const [insightsJobId, setInsightsJobId] = useState<string | undefined>();
   const [glossaryJobId, setGlossaryJobId] = useState<string | undefined>();
+  const [selectionOpen, setSelectionOpen] = useState(false);
 
   // Seleção da Fase 4. Set<slug>. Reset quando muda o nicho.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -223,26 +227,6 @@ export default function NichoPage() {
             {" · "}{withStructured} estruturada{withStructured !== 1 ? "s" : ""}
             {" · "}{withGlossary} com glossário
           </p>
-
-          {eligible.length > 0 && (
-            <button
-              type="button"
-              onClick={toggleAll}
-              className="mt-3 flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <SelectionCheckbox
-                checked={allEligibleSelected}
-                indeterminate={selected.size > 0 && !allEligibleSelected}
-              />
-              <span>
-                {allEligibleSelected
-                  ? "Desmarcar todas"
-                  : selected.size > 0
-                    ? `${selected.size} de ${eligible.length} selecionada${selected.size > 1 ? "s" : ""}`
-                    : "Selecionar todas"}
-              </span>
-            </button>
-          )}
         </div>
 
         <ScrollArea className="flex-1 p-3">
@@ -258,36 +242,12 @@ export default function NichoPage() {
             <div className="space-y-1">
               {interviews.map((iv) => {
                 const href = `/nicho/${encodeURIComponent(niche)}/${encodeURIComponent(iv.name)}`;
-                const isEligible = eligibleNames.has(iv.name);
-                const isSelected = selected.has(iv.name);
                 return (
                   <div
                     key={iv.name}
-                    className={cn(
-                      "flex flex-col gap-1.5 rounded-md px-3 py-2 transition-colors group",
-                      isSelected
-                        ? "bg-primary/10 border border-primary/30"
-                        : "hover:bg-accent border border-transparent",
-                    )}
+                    className="flex flex-col gap-1.5 rounded-md border border-transparent px-3 py-2 transition-colors group hover:bg-accent"
                   >
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => isEligible && toggleOne(iv.name)}
-                        disabled={!isEligible}
-                        title={
-                          isEligible
-                            ? "Incluir/excluir esta entrevista da análise"
-                            : "Sem 03_estruturada.md — não pode entrar na análise"
-                        }
-                        aria-label={`Selecionar ${iv.name}`}
-                        className={cn(
-                          "shrink-0",
-                          !isEligible && "opacity-30 cursor-not-allowed",
-                        )}
-                      >
-                        <SelectionCheckbox checked={isSelected} disabled={!isEligible} />
-                      </button>
+                    <div className="flex items-center gap-2 min-w-0">
                       <Link
                         href={href}
                         className="flex-1 min-w-0 flex items-center gap-1.5"
@@ -321,11 +281,11 @@ export default function NichoPage() {
           <div className="min-w-0">
             <h3 className="text-sm font-semibold flex items-center gap-1.5">
               <Brain className="h-4 w-4 text-primary" />
-              Análise do nicho
+              Análise
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Selecione entrevistas e rode Claude Sonnet 4.6 para gerar uma
-              análise consolidada.
+              Use cada entrevista para extrair insights individuais. Use esta
+              visão para analisar o nicho com múltiplas entrevistas estruturadas.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -337,31 +297,63 @@ export default function NichoPage() {
 
         {/* Barra de ação principal — Fase 4 */}
         <div className="px-6 py-3 border-b border-border shrink-0 flex flex-wrap items-center gap-3">
-          <AnalyzeNicheButton
-            niche={niche}
-            selectedSlugs={selectedSlugs}
-            totalCount={withStructured}
-          />
+          {selectedSlugs.length > 0 ? (
+            <>
+              <AnalyzeNicheButton
+                niche={niche}
+                selectedSlugs={selectedSlugs}
+                totalCount={withStructured}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSelectionOpen(true)}
+                className="gap-2"
+              >
+                <ListChecks className="h-4 w-4" />
+                Alterar entrevistas
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="lg"
+              onClick={() => setSelectionOpen(true)}
+              className="gap-2 gradient-bg text-white border-0 hover:opacity-90 glow-soft"
+            >
+              <Brain className="h-4 w-4" />
+              Analisar nicho
+            </Button>
+          )}
 
-          <div className="h-5 w-px bg-border mx-1" aria-hidden />
+          <Badge variant="secondary" className="text-xs">
+            {selectedSlugs.length > 0
+              ? `${selectedSlugs.length}/${withStructured} selecionada${selectedSlugs.length > 1 ? "s" : ""}`
+              : `${withStructured} elegível${withStructured !== 1 ? "s" : ""}`}
+          </Badge>
 
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-            Consolidações automáticas
-          </span>
-          <ConsolidateButton
-            label="Consolidar Insights"
-            icon={Sparkles}
-            onClick={() => consolidateInsightsMutation.mutate()}
-            isPending={consolidateInsightsMutation.isPending}
-            jobId={insightsJobId}
-          />
-          <ConsolidateButton
-            label="Consolidar Glossário"
-            icon={BookOpen}
-            onClick={() => consolidateGlossaryMutation.mutate()}
-            isPending={consolidateGlossaryMutation.isPending}
-            jobId={glossaryJobId}
-          />
+          <details className="ml-auto group rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-xs">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-muted-foreground hover:text-foreground">
+              <Archive className="h-3.5 w-3.5" />
+              Ações legadas
+            </summary>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <ConsolidateButton
+                label="Insights"
+                icon={Sparkles}
+                onClick={() => consolidateInsightsMutation.mutate()}
+                isPending={consolidateInsightsMutation.isPending}
+                jobId={insightsJobId}
+              />
+              <ConsolidateButton
+                label="Glossário"
+                icon={BookOpen}
+                onClick={() => consolidateGlossaryMutation.mutate()}
+                isPending={consolidateGlossaryMutation.isPending}
+                jobId={glossaryJobId}
+              />
+            </div>
+          </details>
         </div>
 
         <Tabs defaultValue="analysis" className="flex flex-col flex-1 overflow-hidden">
@@ -372,8 +364,8 @@ export default function NichoPage() {
                 Análise
               </TabsTrigger>
               <TabsTrigger value="insights" className="text-xs px-4">
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                Insights consolidados
+                <Archive className="h-3.5 w-3.5 mr-1.5" />
+                Insights legados
               </TabsTrigger>
               <TabsTrigger value="glossary" className="text-xs px-4">
                 <BookOpen className="h-3.5 w-3.5 mr-1.5" />
@@ -408,7 +400,138 @@ export default function NichoPage() {
           </div>
         </Tabs>
       </div>
+
+      <AnalysisSelectionDialog
+        open={selectionOpen}
+        onClose={() => setSelectionOpen(false)}
+        eligible={eligible}
+        selected={selected}
+        allEligibleSelected={allEligibleSelected}
+        onToggleAll={toggleAll}
+        onToggleOne={toggleOne}
+        onClear={() => setSelected(new Set())}
+      />
     </div>
+  );
+}
+
+// ── Seleção sob demanda ───────────────────────────────────────────────────────
+
+function AnalysisSelectionDialog({
+  open,
+  onClose,
+  eligible,
+  selected,
+  allEligibleSelected,
+  onToggleAll,
+  onToggleOne,
+  onClear,
+}: {
+  open: boolean;
+  onClose: () => void;
+  eligible: Interview[];
+  selected: Set<string>;
+  allEligibleSelected: boolean;
+  onToggleAll: () => void;
+  onToggleOne: (name: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} className="max-w-2xl p-0 overflow-hidden">
+      <div className="border-b border-border px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <ListChecks className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold">Analisar nicho</h2>
+            <p className="text-xs text-muted-foreground">
+              Escolha entrevistas estruturadas para uma análise multi-entrevista.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 py-3 border-b border-border flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onToggleAll}
+          disabled={eligible.length === 0}
+          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <SelectionCheckbox
+            checked={allEligibleSelected}
+            indeterminate={selected.size > 0 && !allEligibleSelected}
+            disabled={eligible.length === 0}
+          />
+          <span>
+            {allEligibleSelected
+              ? "Desmarcar todas"
+              : selected.size > 0
+                ? `${selected.size} de ${eligible.length} selecionada${selected.size > 1 ? "s" : ""}`
+                : "Selecionar todas"}
+          </span>
+        </button>
+
+        <Badge variant="secondary" className="text-xs">
+          {eligible.length} elegível{eligible.length !== 1 ? "s" : ""}
+        </Badge>
+      </div>
+
+      <ScrollArea className="max-h-[55vh]">
+        <div className="p-3">
+          {eligible.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+              <AlertCircle className="h-6 w-6 text-muted-foreground/50" />
+              <p className="text-sm font-medium">Nenhuma entrevista elegível</p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                A análise de nicho usa apenas entrevistas com o arquivo estruturado.
+                Extraia insights na página da entrevista antes de analisar o nicho.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {eligible.map((iv) => {
+                const isSelected = selected.has(iv.name);
+
+                return (
+                  <button
+                    key={iv.name}
+                    type="button"
+                    onClick={() => onToggleOne(iv.name)}
+                    className={cn(
+                      "flex w-full items-start gap-3 rounded-md border px-3 py-2 text-left transition-colors",
+                      isSelected
+                        ? "border-primary/40 bg-primary/10"
+                        : "border-transparent hover:bg-accent",
+                    )}
+                  >
+                    <SelectionCheckbox checked={isSelected} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground/85">
+                        {iv.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Pronta para análise de nicho
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
+        <Button type="button" variant="ghost" onClick={onClear} disabled={selected.size === 0}>
+          Limpar
+        </Button>
+        <Button type="button" onClick={onClose} disabled={selected.size === 0}>
+          Confirmar seleção
+        </Button>
+      </div>
+    </Dialog>
   );
 }
 
