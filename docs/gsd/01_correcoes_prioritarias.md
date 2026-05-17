@@ -1,7 +1,7 @@
 # GSD-01 — Correções Prioritárias
 
 > Trabalhar 1 GSD por vez. Não avançar sem autorização.
-> Fase 5 (features novas) está pausada até GSD-008 estar concluído.
+> Fase de Correções (GSD-001 a GSD-008) concluída! Fase 5 liberada.
 
 ---
 
@@ -343,7 +343,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-007 — Ajustar Tema, Fundo e Light Mode
 
-**Status:** ⬜ Pendente
+**Status:** ✅ Concluído (via PR #5)
 
 **Objetivo:**
 1. Corrigir light mode com cores estranhas e baixo contraste
@@ -394,7 +394,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-008 — Limpar Análise de Nicho
 
-**Status:** ⬜ Pendente
+**Status:** ✅ Concluído (via PR #6)
 
 **Objetivo:**
 1. Seleção de entrevistas aparece SOMENTE ao clicar "Analisar nicho" (não poluir a UI)

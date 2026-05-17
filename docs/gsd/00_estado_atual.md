@@ -1,8 +1,8 @@
 # GSD-00 — Estado Atual do Crivo Insights
 
-> Última atualização: 2026-05-03
+> Última atualização: 2026-05-16
 > Build: limpo (12 rotas Next.js, 0 erros TypeScript, 0 erros Python)
-> Status: **Fases 0–4 concluídas. GSD-001–006 concluídos. GSD-007–008 pendentes. Fase 5 pausada.**
+> Status: **Fases 0–4 concluídas. GSD-001–008 concluídos. Fase 5 aguardando início.**
 
 ---
 
@@ -62,8 +62,8 @@ Os itens abaixo foram identificados após as Fases 0–4 e estão documentados e
 | GSD-004 | Configurações de modelos via UI | ✅ Concluído |
 | GSD-005 | Configurações de prompts editáveis | ✅ Concluído |
 | GSD-006 | Ajuste de glossário | ✅ Concluído |
-| GSD-007 | Tema/fundo/light mode | ⬜ Pendente |
-| GSD-008 | Limpeza da análise de nicho | ⬜ Pendente |
+| GSD-007 | Tema/fundo/light mode | ✅ Concluído |
+| GSD-008 | Limpeza da análise de nicho | ✅ Concluído |
 
 ---
 
