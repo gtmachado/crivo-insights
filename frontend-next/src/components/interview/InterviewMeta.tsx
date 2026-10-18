@@ -1,230 +1,119 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getInterviewMeta,
-  updateInterviewMeta,
-  type InterviewMeta,
-} from "@/lib/api";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Pencil } from "lucide-react";
+import { errorMessage, getInterviewMeta, updateInterviewMeta, type InterviewMeta as Meta } from "@/lib/api";
+import { formatDate } from "@/lib/format";
+import { qk } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Pencil, Save, X, User, UserCheck } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+
+type Field = { key: keyof Meta; label: string; placeholder: string; type?: string; multiline?: boolean };
+
+// FUTURO (BL-007 / Supabase Auth): `interviewer_name` passa a ser um <select> com os
+// usuários do Supabase e o backend recebe `interviewer_user_id` (já reservado no
+// metadata.json). Trocar o campo abaixo é a única mudança de UI necessária.
+const FIELDS: Field[] = [
+  { key: "title",             label: "Título",       placeholder: "Título da entrevista" },
+  { key: "interviewee_name",  label: "Entrevistado", placeholder: "Nome completo" },
+  { key: "interviewer_name",  label: "Entrevistador", placeholder: "Nome do entrevistador" },
+  { key: "interviewee_email", label: "E-mail",       placeholder: "email@exemplo.com", type: "email" },
+  { key: "interviewee_phone", label: "Telefone",     placeholder: "+55 11 99999-9999", type: "tel" },
+  { key: "notes",             label: "Observações",  placeholder: "Notas extras", multiline: true },
+];
 
 /**
- * Painel de metadata da entrevista.
- *
- * Modo compacto (default): strip horizontal com entrevistado / entrevistador.
- * Clicando "Editar" expande para form completo (2 colunas).
- *
- * ─── FUTURO (BL-007 / Supabase Auth) ────────────────────────────────────────
- * O campo `interviewer_name` é atualmente um <input> de texto livre.
- * Quando a autenticação Supabase for implementada:
- *   1. Substituir por <select> populado via GET /auth/users (Supabase admin API)
- *   2. Enviar `interviewer_user_id` (UUID do usuário) junto com o nome
- *   3. O backend pode validar o ID e derivar o nome do perfil automaticamente
- * O campo `interviewer_user_id` já existe em InterviewMeta e no metadata.json
- * exatamente para facilitar essa migração sem breaking change.
- * ────────────────────────────────────────────────────────────────────────────
+ * Dados da entrevista (metadata.json): leitura em lista de definições e, ao
+ * clicar em Editar, formulário vertical. O pai usa `key` para reiniciar o
+ * componente ao trocar de entrevista.
  */
-export function InterviewMeta({
-  niche,
-  interview,
-}: {
-  niche: string;
-  interview: string;
-}) {
+export function InterviewMeta({ niche, interview }: { niche: string; interview: string }) {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<Partial<InterviewMeta>>({});
+  const [form, setForm] = useState<Partial<Meta> | null>(null);
 
   const { data: meta = {} } = useQuery({
-    queryKey: ["interview-meta", niche, interview],
+    queryKey: qk.interviewMeta(niche, interview),
     queryFn: () => getInterviewMeta(niche, interview),
     staleTime: 5 * 60_000,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: () => updateInterviewMeta(niche, interview, form),
+  const save = useMutation({
+    mutationFn: (values: Partial<Meta>) => updateInterviewMeta(niche, interview, values),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["interview-meta", niche, interview] });
-      setEditing(false);
-      toast.success("Metadata salva.");
+      qc.invalidateQueries({ queryKey: qk.interviewMeta(niche, interview) });
+      qc.invalidateQueries({ queryKey: qk.interviews(niche) }); // título/entrevistado aparecem na lista
+      setForm(null);
+      toast.success("Dados da entrevista salvos.");
     },
-    onError: () => toast.error("Erro ao salvar metadata."),
+    onError: (e) => toast.error(errorMessage(e)),
   });
 
-  // Reset ao trocar de entrevista
-  useEffect(() => {
-    setEditing(false);
-    setForm({});
-  }, [niche, interview]);
-
-  function startEdit() {
-    setForm({ ...meta });
-    setEditing(true);
-  }
-
-  function set(field: keyof InterviewMeta, value: string) {
-    setForm((f) => ({ ...f, [field]: value }));
-  }
-
-  // ── Modo edição ──────────────────────────────────────────────────────────────
-  if (editing) {
+  if (form) {
     return (
-      <div className="px-5 py-3 border-b border-border bg-background/30 backdrop-blur-sm shrink-0">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-          {/* Linha 1 */}
-          <div className="space-y-1">
-            <Label className="text-xs">Título</Label>
-            <Input
-              className="h-7 text-xs"
-              value={form.title ?? ""}
-              onChange={(e) => set("title", e.target.value)}
-              placeholder="Título da entrevista"
-            />
-          </div>
-
-          {/*
-           * FUTURO (BL-007): substituir este <Input> por <select> com usuários
-           * Supabase. Ver comentário no topo do arquivo para o plano de migração.
-           */}
-          <div className="space-y-1">
-            <Label className="text-xs">Entrevistador</Label>
-            <Input
-              className="h-7 text-xs"
-              value={form.interviewer_name ?? ""}
-              onChange={(e) => set("interviewer_name", e.target.value)}
-              placeholder="Nome do entrevistador"
-            />
-          </div>
-
-          {/* Linha 2 */}
-          <div className="space-y-1">
-            <Label className="text-xs">Entrevistado</Label>
-            <Input
-              className="h-7 text-xs"
-              value={form.interviewee_name ?? ""}
-              onChange={(e) => set("interviewee_name", e.target.value)}
-              placeholder="Nome completo"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">
-              Telefone{" "}
-              <span className="text-muted-foreground font-normal">(opcional)</span>
-            </Label>
-            <Input
-              className="h-7 text-xs"
-              value={form.interviewee_phone ?? ""}
-              onChange={(e) => set("interviewee_phone", e.target.value)}
-              placeholder="+55 11 99999-9999"
-              type="tel"
-            />
-          </div>
-
-          {/* Linha 3 */}
-          <div className="space-y-1">
-            <Label className="text-xs">
-              E-mail{" "}
-              <span className="text-muted-foreground font-normal">(opcional)</span>
-            </Label>
-            <Input
-              className="h-7 text-xs"
-              value={form.interviewee_email ?? ""}
-              onChange={(e) => set("interviewee_email", e.target.value)}
-              placeholder="email@exemplo.com"
-              type="email"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">
-              Observações{" "}
-              <span className="text-muted-foreground font-normal">(opcional)</span>
-            </Label>
-            <Input
-              className="h-7 text-xs"
-              value={form.notes ?? ""}
-              onChange={(e) => set("notes", e.target.value)}
-              placeholder="Notas extras"
-            />
-          </div>
-        </div>
-
-        {/* Ações */}
-        <div className="flex items-center gap-2 mt-3">
-          <Button
-            size="sm"
-            className="h-7 text-xs gap-1.5 gradient-bg text-white border-0 hover:opacity-90 glow-soft"
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-          >
-            <Save className="h-3 w-3" />
-            {saveMutation.isPending ? "Salvando…" : "Salvar"}
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate(form);
+        }}
+      >
+        {FIELDS.map(({ key, label, placeholder, type, multiline }) => {
+          const id = `meta-${key}`;
+          const props = {
+            id,
+            placeholder,
+            value: form[key] ?? "",
+            onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+              setForm((f) => ({ ...f, [key]: e.target.value })),
+          };
+          return (
+            <div key={key} className="space-y-1">
+              <Label htmlFor={id} className="text-xs">{label}</Label>
+              {multiline ? <Textarea {...props} rows={3} /> : <Input {...props} type={type} />}
+            </div>
+          );
+        })}
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" disabled={save.isPending}>
+            {save.isPending ? "Salvando…" : "Salvar"}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs gap-1.5"
-            onClick={() => setEditing(false)}
-            disabled={saveMutation.isPending}
-          >
-            <X className="h-3 w-3" />
+          <Button type="button" size="sm" variant="ghost" disabled={save.isPending} onClick={() => setForm(null)}>
             Cancelar
           </Button>
         </div>
-      </div>
+      </form>
     );
   }
 
-  // ── Modo compacto (read) ──────────────────────────────────────────────────────
-  const hasData = !!(meta.interviewee_name || meta.interviewer_name || meta.title);
+  const rows = FIELDS.filter(({ key }) => key !== "title" && meta[key]);
+  const created = formatDate(meta.created_at);
 
   return (
-    <div className="px-5 py-2 border-b border-border bg-background/20 backdrop-blur-sm shrink-0 flex items-center gap-4 min-w-0">
-      {hasData ? (
-        <div className="flex items-center gap-4 flex-1 min-w-0 text-xs text-muted-foreground">
-          {meta.interviewee_name && (
-            <span className="flex items-center gap-1.5 min-w-0 shrink-0">
-              <User className="h-3 w-3 shrink-0 text-primary/60" />
-              <span className="truncate">{meta.interviewee_name}</span>
-            </span>
-          )}
-          {meta.interviewer_name && (
-            <span className="flex items-center gap-1.5 min-w-0 shrink-0">
-              <UserCheck className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-              <span className="truncate">{meta.interviewer_name}</span>
-            </span>
-          )}
-          {meta.interviewee_email && (
-            <span className="truncate hidden lg:inline text-muted-foreground/50">
-              {meta.interviewee_email}
-            </span>
-          )}
-          {!meta.interviewee_name && !meta.interviewer_name && meta.title && (
-            <span className="truncate font-medium text-foreground/70">{meta.title}</span>
-          )}
-        </div>
+    <div className="space-y-3">
+      {rows.length === 0 && !created ? (
+        <p className="text-sm text-muted-foreground">Nenhum dado cadastrado.</p>
       ) : (
-        <p className="flex-1 text-xs text-muted-foreground/40 italic">
-          Sem metadata — clique em Editar para adicionar.
-        </p>
+        <dl className="space-y-2 text-sm">
+          {rows.map(({ key, label }) => (
+            <div key={key}>
+              <dt className="text-2xs uppercase tracking-wider text-muted-foreground">{label}</dt>
+              <dd className="break-words">{meta[key]}</dd>
+            </div>
+          ))}
+          {created && (
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted-foreground">Criada em</dt>
+              <dd>{created}</dd>
+            </div>
+          )}
+        </dl>
       )}
-
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="h-6 text-xs gap-1 px-2 text-muted-foreground hover:text-foreground shrink-0"
-        onClick={startEdit}
-        title="Editar metadata da entrevista"
-      >
-        <Pencil className="h-3 w-3" />
-        Editar
+      <Button type="button" size="sm" variant="outline" onClick={() => setForm({ ...meta })}>
+        <Pencil aria-hidden /> Editar dados
       </Button>
     </div>
   );

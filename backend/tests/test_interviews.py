@@ -164,6 +164,24 @@ def test_listagem_mostra_estagios_e_ignora_pastas_privadas(client, make_intervie
     assert result[0]["stages"] == {"raw": True, "refined": False, "structured": False, "glossary": False}
 
 
+def test_listagem_inclui_dados_do_metadata(client, make_interview):
+    make_interview(name="com-meta")
+    make_interview(name="sem-meta")
+    write_meta("saude", "com-meta", {"title": "Maria — UTI", "interviewee_name": "Maria", "created_at": "2026-01-02T10:00:00+00:00"})
+
+    by_name = {i["name"]: i for i in client.get("/interviews/saude").json()}
+    assert by_name["com-meta"]["title"] == "Maria — UTI"
+    assert by_name["com-meta"]["interviewee_name"] == "Maria"
+    assert by_name["sem-meta"]["title"] is None and by_name["sem-meta"]["created_at"] is None
+
+
+def test_meta_corrompido_nao_quebra_a_listagem(client, make_interview):
+    base = make_interview(name="quebrada")
+    (base / "metadata.json").write_text("[1, 2]", encoding="utf-8")
+    assert client.get("/interviews/saude").status_code == 200
+    assert client.get("/interviews/saude/quebrada/meta").json() == {}
+
+
 def test_listagem_de_nicho_inexistente_vazia(client):
     assert client.get("/interviews/nada").json() == []
 

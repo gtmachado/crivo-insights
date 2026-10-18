@@ -43,6 +43,10 @@ class StageFlags(BaseModel):
 class InterviewSummary(BaseModel):
     name: str
     stages: StageFlags
+    # Do metadata.json (ausentes em entrevistas anteriores ao GSD-002).
+    title: str | None = None
+    interviewee_name: str | None = None
+    created_at: str | None = None
 
 
 class FileEntry(BaseModel):

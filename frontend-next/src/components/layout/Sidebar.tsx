@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LayoutDashboard, LogOut, Menu, Plus, Settings, type LucideIcon } from "lucide-react";
-import { getInterviews, getNiches } from "@/lib/api";
-import { qk } from "@/lib/query-keys";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { useNicheOverview } from "@/hooks/useNicheOverview";
 import { useSystemStatus } from "@/hooks/useSystemStatus";
 import { Logo } from "@/components/common/Logo";
 import { SectionLabel } from "@/components/common/PageHeader";
@@ -75,14 +73,7 @@ function ApiStatus({ onNavigate }: { onNavigate?: () => void }) {
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: niches = [], isLoading } = useQuery({ queryKey: qk.niches, queryFn: getNiches });
-  const counts = useQueries({
-    queries: niches.map((niche) => ({
-      queryKey: qk.interviews(niche),
-      queryFn: () => getInterviews(niche),
-      staleTime: 30_000,
-    })),
-  });
+  const { niches, isLoading } = useNicheOverview();
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -126,12 +117,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 Nenhum nicho ainda. Envie a primeira entrevista.
               </p>
             )}
-            {niches.map((niche, i) => {
-              const href = `/nicho/${encodeURIComponent(niche)}`;
-              const count = counts[i]?.data?.length;
+            {niches.map(({ name, interviews }) => {
+              const href = `/nicho/${encodeURIComponent(name)}`;
+              const count = interviews?.length;
               return (
                 <NavLink
-                  key={niche}
+                  key={name}
                   href={href}
                   active={pathname === href || pathname.startsWith(`${href}/`)}
                   onNavigate={onNavigate}
@@ -141,7 +132,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     )
                   }
                 >
-                  {niche}
+                  {name}
                 </NavLink>
               );
             })}

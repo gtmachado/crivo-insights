@@ -133,6 +133,10 @@ export type DocType = keyof InterviewStages;
 export type Interview = {
   name: string;
   stages: InterviewStages;
+  /** Do metadata.json — ausentes em entrevistas anteriores ao GSD-002. */
+  title?: string | null;
+  interviewee_name?: string | null;
+  created_at?: string | null;
 };
 
 export type JobStatus = "running" | "done" | "error";

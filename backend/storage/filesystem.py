@@ -156,7 +156,14 @@ def list_interviews(niche: str) -> list[dict]:
         if not _is_interview_dir(d):
             continue
         stages = {doc: (d / subdir / filename).exists() for doc, (subdir, filename) in DOCS.items()}
-        result.append({"name": d.name, "stages": stages})
+        meta = _read_meta_file(d / META_FILENAME)
+        result.append({
+            "name": d.name,
+            "stages": stages,
+            "title": meta.get("title") or None,
+            "interviewee_name": meta.get("interviewee_name") or None,
+            "created_at": meta.get("created_at") or None,
+        })
     return result
 
 
@@ -195,19 +202,22 @@ def structured_docs_for_selected(
 
 # ── Metadata da entrevista ────────────────────────────────────────────────────
 
+def _read_meta_file(path: Path) -> dict:
+    """JSON do metadata; {} se ausente, corrompido ou que não seja um objeto."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def read_meta(niche: str, interview_name: str) -> dict:
     """
     Lê o metadata.json da entrevista.
     Retorna {} se o arquivo não existir — metadata é opcional para entrevistas
     antigas que não passaram pelo upload com GSD-002.
     """
-    path = interview_path(niche, interview_name) / META_FILENAME
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+    return _read_meta_file(interview_path(niche, interview_name) / META_FILENAME)
 
 
 def write_meta(niche: str, interview_name: str, data: dict) -> None:

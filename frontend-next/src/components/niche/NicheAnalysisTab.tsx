@@ -1,79 +1,50 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getNicheAnalysis } from "@/lib/api";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sparkles } from "lucide-react";
+import { ApiError, getNicheAnalysis } from "@/lib/api";
+import { qk } from "@/lib/query-keys";
+import { EmptyState, ErrorState, LoadingState } from "@/components/common/States";
 import { MarkdownPreview } from "@/components/markdown/MarkdownPreview";
-import { Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
- * Aba de visualização da análise manual do nicho (Fase 4).
+ * Análise consolidada do nicho (Claude Sonnet 4.6 sobre as entrevistas
+ * estruturadas selecionadas). O cache é invalidado quando o job termina.
  *
- * Estados:
- *  - loading       → spinner
- *  - sem dados     → call-to-action explicando como gerar
- *  - dados prontos → MarkdownPreview no rolável
- *
- * O cache é invalidado pelo AnalyzeNicheButton quando o job termina.
+ * "Ainda não gerada" (404) e falha real são estados diferentes.
  */
-export function NicheAnalysisTab({
-  niche,
-  hasInterviewsSelected,
-}: {
-  niche: string;
-  hasInterviewsSelected: boolean;
-}) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["niche-analysis", niche],
+export function NicheAnalysisTab({ niche, onGoToInterviews }: { niche: string; onGoToInterviews: () => void }) {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: qk.nicheAnalysis(niche),
     queryFn: () => getNicheAnalysis(niche),
     staleTime: 30_000,
     retry: false,
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-48">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingState lines={6} />;
 
-  if (isError || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 p-8 text-center">
-        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center glow-soft">
-          <Sparkles className="h-5 w-5 text-primary" />
-        </div>
-        <p className="text-sm font-medium">Análise do nicho ainda não gerada</p>
-        <p className="text-xs text-muted-foreground max-w-sm leading-relaxed">
-          {hasInterviewsSelected ? (
-            <>
-              Clique em <strong className="text-foreground">Analisar nicho</strong>{" "}
-              acima para rodar a análise consolidada com Claude Sonnet 4.6 sobre
-              as entrevistas selecionadas.
-            </>
-          ) : (
-            <>
-              Clique em{" "}
-              <strong className="text-foreground">Analisar nicho</strong>.
-              Você poderá escolher as entrevistas estruturadas antes de iniciar.
-            </>
-          )}
-        </p>
-        <p className="text-[11px] text-muted-foreground/70 mt-2 flex items-center gap-1">
-          <AlertCircle className="h-3 w-3" />
-          A análise usa apenas os arquivos{" "}
-          <code className="font-mono">03_estruturada.md</code>.
-        </p>
-      </div>
-    );
+  if (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return (
+        <EmptyState
+          icon={Sparkles}
+          title="A análise deste nicho ainda não foi gerada"
+          description="Escolha as entrevistas estruturadas na aba Entrevistas e gere a análise. Ela usa apenas o documento estruturado de cada uma."
+          action={
+            <Button variant="outline" onClick={onGoToInterviews}>
+              Escolher entrevistas
+            </Button>
+          }
+        />
+      );
+    }
+    return <ErrorState title="Não foi possível carregar a análise" error={error} onRetry={() => refetch()} />;
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-6">
-        <MarkdownPreview content={data} />
-      </div>
-    </ScrollArea>
+    <article className="rounded-xl bg-card px-5 py-6 ring-1 ring-foreground/10 sm:px-10 sm:py-8">
+      <MarkdownPreview content={data ?? ""} />
+    </article>
   );
 }
