@@ -52,12 +52,12 @@ Os comandos abaixo são para o **PowerShell** (no Windows, scripts da pasta atua
 
 ```powershell
 # 1. Backend — Python 3.11
-python -m venv venv; .env\Scripts\Activate.ps1
+python -m venv venv; .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt                      # testes: pip install -r requirements-dev.txt
 # FFmpeg precisa estar no PATH (https://ffmpeg.org/download.html)
 
 Copy-Item .env.example .env   # preencha OPENROUTER_API_KEY (ou outro provedor) e API_SECRET_KEY
-.un_backend.bat            # Linux/Mac: ./run_backend.sh  →  http://localhost:8000
+.\run_backend.bat            # Linux/Mac: ./run_backend.sh  →  http://localhost:8000
 ```
 
 ```powershell
