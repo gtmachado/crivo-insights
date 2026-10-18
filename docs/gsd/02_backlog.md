@@ -107,3 +107,5 @@
 **Impacto:** Baixo no produto, médio para percepção de marca.
 
 **Nota:** O favicon está listado como "Extra" no GSD-01. Este BL trata da identidade visual completa (logo, paleta oficial, tipografia).
+
+**Andamento:** a paleta oficial ("Caderno de Campo"), a tipografia (Inter + Source Serif 4 + JetBrains Mono), o logo de peneira e o favicon foram entregues no refactor/facelift. Restam variações do logo para materiais externos.

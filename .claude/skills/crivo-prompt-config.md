@@ -1,5 +1,7 @@
 # Skill: crivo-prompt-config
 
+> **Atualização (refactor + facelift):** GSD-003/004/005 estão **concluídos**. Hoje os prompts são lidos por `services/prompt_store.py` (com backup/restore) e os modelos escolhidos na UI por `services/model_config.py`; as tarefas configuráveis são só `refine`, `structure` e `glossary` (`core/layout.py`). As tarefas `consolidate*` e os prompts de consolidação foram removidos. As tabelas de "hardcoded" abaixo são históricas.
+
 ## Objetivo
 Editar prompts LLM e configurar modelos por etapa no Crivo Insights.
 

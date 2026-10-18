@@ -1,5 +1,7 @@
 # Skill: crivo-feature
 
+> **Atualização (refactor + facelift):** os blocos GSD-002 a GSD-008 abaixo estão **concluídos** e valem como histórico. A consolidação automática (insights/glossário do nicho, `consolidator.py`) foi removida; a análise de nicho é manual (`niche_analyzer.py`). O visual agora é o "Caderno de Campo" (ver `crivo-ui-polish.md`) e o fluxo de trabalho é o Trilho auditável do `CLAUDE.md`.
+
 ## Objetivo
 Implementar features novas no Crivo Insights de forma incremental e segura.
 
@@ -66,7 +68,7 @@ Checklist:
 - [ ] `toast.success/error` no `onSuccess`/`onError`
 - [ ] `invalidateQueries` após mutação
 - [ ] Polling: `refetchInterval: (q) => q.state.data?.status === "running" ? 2000 : false`
-- [ ] Classe `.glass` em painéis novos
+- [ ] Painéis novos com tokens (`bg-card ring-1 ring-foreground/10`) — ver `crivo-ui-polish.md`
 - [ ] `.gradient-bg text-white` em botões primários
 - [ ] `.crivo-prose` em containers de markdown
 

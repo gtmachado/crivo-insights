@@ -333,3 +333,30 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
   - **Login real do Supabase não exercitado:** a QA usou uma sessão simulada no navegador de teste, sem credenciais reais.
   - **Impressão do glossário:** a rota `/glossario/print` dispara `window.print()`, então não foi aberta no teste. Ela só ganhou o parser novo e a chave de cache.
   - **Token na URL de mídia:** o token continua indo na query de `/media`, porque `<audio>`/`<video>` não enviam `Authorization`. É o desenho antigo, registrado no ADR.
+
+---
+
+## E8 — Docs e PR
+
+- **O quê:** a documentação passa a refletir o código real. Antes havia afirmações antigas (Streamlit, prompts `.txt`, "Next 15", "AI Glow").
+  - **`README.md` raiz:** reescrito (pipeline, estrutura em disco, como rodar, variáveis, prompts, arquitetura do backend, testes).
+  - **`frontend-next/README.md`:** o texto padrão do create-next-app foi trocado por estrutura e convenções.
+  - **`CLAUDE.md`:**
+    - fatos corrigidos (Next 16, `core/pipeline.py`, `metadata.json`, fim da pausa da Fase 5, consolidação e Streamlit removidos);
+    - o fluxo "um GSD por vez com parada" foi substituído pelo Trilho auditável (regras 11–18);
+    - tabela visual atualizada;
+    - novas regras: cores só por token, `core/layout.py` como fonte única, conferir imports após `shadcn add`.
+  - **`AGENTS.md`:** regras e referências alinhadas ao novo fluxo.
+  - **Skills:**
+    - `crivo-ui-polish.md` reescrita para o sistema atual;
+    - avisos de atualização em `crivo-feature`, `crivo-prompt-config` e `crivo-cost-control`.
+  - **`docs/gsd/`:**
+    - `00_estado_atual.md` ganhou a seção do refactor;
+    - `01_correcoes_prioritarias.md` teve os status de GSD-003 a 006 e do Extra (logo e favicon) corrigidos;
+    - `02_backlog.md` registra o andamento do BL-008.
+  - **Handoff:** `CURRENT_TASK`, `LAST_SESSION` e `AGENT_LOG`.
+- **Por quê:** quem assumir o projeto lê os docs antes do código (AGENTS.md); docs desatualizados custam mais que ausência de docs.
+- **Evidência dos gates:** os mesmos da E7; esta etapa só mexeu em documentação (nenhum `.py`, `.ts` ou `.tsx` alterado).
+- **Riscos e pendências:**
+  - **Docs históricos:** `docs/sdd/*` e `docs/decisions/ADR-001-arquitetura-base.md` não foram reescritos e citam coisas removidas (ex.: consolidação, AmbientBackground). São registros de decisão da época.
+  - **Merge:** o PR é de `refactor/facelift` para `main`; a branch `docs/sync-gsd-007-008` (base deste trabalho, ainda sem PR) entra junto.

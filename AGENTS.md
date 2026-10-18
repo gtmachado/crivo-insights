@@ -51,8 +51,7 @@ Todo agente, antes de qualquer ação, **deve ler**:
    - arquivos principais envolvidos
    - próximo passo concreto
    - riscos identificados
-4. **Apresente plano mínimo** antes de alterar qualquer código
-5. **Aguarde "pode começar"** do usuário
+4. **Feature nova:** apresente o plano e aguarde aprovação. Aprovado o plano, siga as etapas sem pedir "pode começar" a cada uma (Trilho auditável do `CLAUDE.md`)
 
 ---
 
@@ -70,14 +69,16 @@ Antes de encerrar, **atualize obrigatoriamente**:
 
 | Regra | Descrição |
 |---|---|
-| 1 GSD = 1 branch = 1 PR | Nunca trabalhar direto na `main` |
-| Não avançar escopo | Executar apenas o GSD autorizado |
-| Plano antes de código | Sempre propor e aguardar aprovação |
+| 1 mudança = 1 branch = 1 PR | Nunca trabalhar direto na `main` |
+| Não avançar escopo | Executar apenas o plano aprovado |
+| Plano antes de feature nova | Propor e aguardar aprovação; depois seguir as etapas |
+| Trilho auditável | Gates verdes + commit + entrada em `docs/refactor/LOG.md` por etapa |
 | Menor patch possível | Edit cirúrgico; Write completo só para arquivos novos |
-| Nunca modificar `pipeline.py` | Usar interceptor em `interviews.py` |
-| Sonnet 4.6 fixo em `niche_analysis` | Nunca usar `_resolve_model()` lá |
-| `py_compile` antes de entregar | Todo `.py` tocado deve compilar |
-| `npm run build` se tocou `.tsx/.ts` | Build limpo antes de PR |
+| Nunca modificar `backend/core/pipeline.py` | Usar o interceptor em `services/interview_runner.py` |
+| Sonnet 4.6 fixo em `niche_analysis` | `call_with_model()`; nunca `resolve_model()` lá |
+| Backend: `py_compile` + `pytest` | Verdes antes de entregar |
+| Frontend: `lint` + `tsc --noEmit` + `build` | 0 problemas antes de PR |
+| Cores só por token | Nada de `emerald-*`, hex ou rgb (ver `crivo-ui-polish.md`) |
 | Sem Opus sem autorização | Custo proibitivo |
 | Docs vencem memória | Sempre reler docs antes de agir |
 
@@ -115,8 +116,8 @@ Não altere código antes de me mostrar o plano mínimo e eu aprovar.
 | Arquivo | Quando usar |
 |---|---|
 | `.claude/skills/crivo-debug.md` | Bug, erro de build, player não toca, 500 no backend |
-| `.claude/skills/crivo-feature.md` | Feature nova (GSD em aberto) |
-| `.claude/skills/crivo-ui-polish.md` | Ajuste visual, tema, animação (GSD-007) |
+| `.claude/skills/crivo-feature.md` | Feature nova |
+| `.claude/skills/crivo-ui-polish.md` | Ajuste visual, tema, tokens, componentes |
 | `.claude/skills/crivo-prompt-config.md` | Editar prompt ou modelo LLM |
 | `.claude/skills/crivo-cost-control.md` | Controle de custo, auditoria de tokens |
 
@@ -124,6 +125,6 @@ Não altere código antes de me mostrar o plano mínimo e eu aprovar.
 
 ## Observação sobre o frontend-next/AGENTS.md
 
-O arquivo `frontend-next/AGENTS.md` contém avisos sobre o Next.js 15 (APIs com breaking changes).
+O arquivo `frontend-next/AGENTS.md` contém avisos sobre o Next.js 16 (APIs com breaking changes).
 Ele é referenciado por `frontend-next/CLAUDE.md` para alertar agentes sobre convenções do framework.
 É um arquivo técnico distinto deste — **não substituí-lo**.

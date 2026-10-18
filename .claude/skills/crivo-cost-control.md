@@ -1,5 +1,7 @@
 # Skill: crivo-cost-control
 
+> **Atualização (refactor + facelift):** a consolidação de insights/glossário (linhas de custo abaixo) foi removida; a seleção on-demand para análise de nicho (GSD-008) está concluída. A execução do refactor segue o Trilho auditável: sem disparar upload/transcrição/análise só para testar.
+
 ## Objetivo
 Operar o Crivo Insights com o menor custo possível de tokens, sem degradar qualidade.
 
@@ -33,8 +35,6 @@ Operar o Crivo Insights com o menor custo possível de tokens, sem degradar qual
 | Structure | Sonnet 4.6 (padrão) | ~6–10k tokens | Manual, por entrevista |
 | Glossary | Configurável (Haiku OK) | ~5–7k tokens | Manual, por entrevista |
 | **Análise de nicho** | **Sonnet 4.6 fixo** | **~15–40k tokens** | **Manual, N entrevistas** |
-| Consolidação glossário | Configurável | ~8k tokens | Manual |
-| Consolidação insights | Configurável | ~10k tokens | Manual |
 
 ---
 
@@ -56,7 +56,7 @@ Operar o Crivo Insights com o menor custo possível de tokens, sem degradar qual
 
 ## Otimizações Pendentes (ver GSD)
 
-- [ ] Seleção on-demand para análise de nicho (GSD-008) — menos tokens por não pré-carregar
+- [x] Seleção on-demand para análise de nicho (GSD-008) ✅ — menos tokens por não pré-carregar
 
 ---
 
