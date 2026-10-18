@@ -8,7 +8,7 @@ import { getInterviews, type Interview } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog-legacy";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AnalyzeNicheButton } from "@/components/niche/AnalyzeNicheButton";
 import { NicheAnalysisTab } from "@/components/niche/NicheAnalysisTab";

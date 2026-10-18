@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, Trash2 } from "lucide-react";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog-legacy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

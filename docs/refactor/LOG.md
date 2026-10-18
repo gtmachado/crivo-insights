@@ -165,3 +165,43 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
 - **Riscos e pendências:**
   - **Busca com acento não verificada no browser:** a verificação funcional ("agil" encontra "ágil") fica para a E7.
   - **Lint herdado:** os 15 erros herdados (`react-hooks/set-state-in-effect` e afins) continuam; as páginas e componentes que os contêm são reescritos na E5/E6, e o lint deve fechar em 0 erros ali.
+
+---
+
+## E4 — Design system "Caderno de Campo"
+
+- **O quê:**
+  - **`globals.css` reescrito:** tokens em oklch para claro (padrão) e escuro grafite quente.
+    - **Cores:**
+      - papel off-white, tinta grafite, acento verde-petróleo e marca-texto âmbar;
+      - tons semânticos novos `success`, `warning`, `info`, `highlight` e `destructive-soft`, cada um com variantes `-soft` e `-foreground` pensadas para contraste de texto (substituirão as 45 cores `emerald-*`/`amber-*` fixas).
+    - **Tipografia e medidas:** escala `text-2xs` (substitui os `text-[10px]`/`[11px]`) e raio base de 0.5rem.
+    - **`.crivo-prose` para leitura longa:** medida de 72ch, títulos em serifa, `h4` como rótulo, citação com barra de marca-texto em itálico serifado, tabelas com rolagem horizontal.
+    - **Tema de código:** `highlight.js` por tokens `--hl-*` em vez do tema `github-dark.css` fixo.
+    - **Impressão:** o bloco foi preservado.
+    - **Seleção e movimento reduzido:** `::selection` agora é o marca-texto; `prefers-reduced-motion` desliga todas as animações.
+  - **Fontes locais:** `@fontsource-variable` Inter, Source Serif 4 e JetBrains Mono. Nada é baixado no build, o que evita repetir o problema do commit `92de5b2`.
+  - **`ThemeProvider`:** `defaultTheme="light"`, `storageKey="crivo:theme:v2"` (quem tinha o antigo padrão escuro volta ao claro), `disableTransitionOnChange`.
+  - **Componentes `ui/` via shadcn CLI 4.5.0 (base-ui, sem `asChild`):** `select`, `checkbox`, `switch`, `dialog`, `alert-dialog`, `sheet`, `tooltip`, `dropdown-menu`, `skeleton`, `separator`, `breadcrumb`, `table`, `popover`, `command` e `input-group`. O `button`, o `input` e o `textarea` foram atualizados para a versão do registry.
+  - **`components/common/`:** `Logo` e `LogoMark` (peneira de pontos), `PageHeader`, `PageContainer`, `SectionLabel`, `StatusBadge` e `StatusIcon`, `EmptyState`, `ErrorState` e `LoadingState`. `ErrorState` separa falha real de "ainda não gerado".
+  - **`lib/status.ts`:** mapa único de status → rótulo e tom. É a fonte que substituirá as cinco cópias existentes.
+  - **Marca:** `app/icon.svg` (favicon) com a mesma peneira. Fecha a pendência de logo e favicon.
+  - **Compatibilidade temporária:** as classes `.glass*`, `.glow-*` e `.gradient-*` viram equivalentes neutros e `.ambient-blob` fica oculto, até a E6 remover os usos. O `dialog` antigo, feito à mão, virou `dialog-legacy.tsx` (2 usos), para sair na E6.
+- **Por quê:** definir o sistema (tokens, tipografia e componentes) uma vez, antes de redesenhar as telas.
+- **Ocorrência de segurança de cadeia de suprimentos (corrigida):** a CLI do shadcn 4.5.0 reescreveu os imports dos componentes para `from "cn"` e adicionou ao `package.json` um pacote npm homônimo, `cn@0.4.0`, em vez de usar o `@/lib/utils` do projeto.
+  - Todos os imports foram reapontados para `@/lib/utils` (25 arquivos conferidos) e o pacote `cn` foi desinstalado (ausente de `node_modules` e do `package.json`).
+  - Os imports de todos os componentes `ui/` foram auditados: só `@base-ui/react/*`, `lucide-react`, `class-variance-authority`, `cmdk`, `sonner`, `next-themes`, `react` e `react-dom`.
+  - **Para futuras adições com a CLI:** conferir os imports e o `package.json` depois de cada `shadcn add`.
+- **Arquivos:** `src/app/{globals.css,layout.tsx,icon.svg}`, `src/components/{ui/*,common/*,theme/ThemeProvider.tsx}`, `src/lib/status.ts`, `package.json`, `package-lock.json`.
+- **Evidência dos gates:**
+  - `tsc --noEmit`: exit 0;
+  - `npm run lint`: 17 problemas (15 erros, 2 warnings), **igual à baseline**;
+  - `npm run build`: OK, 11 rotas (inclui `/icon.svg`);
+  - verificação visual em `/login`:
+    - fundo papel, tema claro por padrão;
+    - Inter e Source Serif 4 carregadas localmente (`document.fonts`);
+    - título em serifa e botão verde-petróleo.
+- **Riscos e pendências:**
+  - **Contraste AA não medido:** será checado na E7. Os tons `-foreground` foram escolhidos com diferença de luminosidade de pelo menos 0.5 sobre o `-soft`.
+  - **Páginas ainda no visual antigo:** dashboard, upload, entrevista etc. continuam com a estrutura antiga sob a nova paleta; E5/E6 as redesenham.
+  - **Tema de código por tokens:** a E7 confere visualmente em claro e escuro.
