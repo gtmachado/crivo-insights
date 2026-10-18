@@ -40,24 +40,40 @@ dores (com classificação em 7 atributos), sinais de urgência e de disposiçã
 
 ## Como rodar
 
-```bash
+Os comandos abaixo são para o **PowerShell** (no Windows, scripts da pasta atual precisam do `.\`, e não há `&&`).
+
+**Atalho (backend + frontend, sem ngrok, cada um em sua janela):**
+
+```powershell
+.\dev_local.bat
+```
+
+**Passo a passo:**
+
+```powershell
 # 1. Backend — Python 3.11
-python -m venv venv && venv\Scripts\activate        # Linux/Mac: source venv/bin/activate
+python -m venv venv; .env\Scripts\Activate.ps1
 pip install -r requirements.txt                      # testes: pip install -r requirements-dev.txt
 # FFmpeg precisa estar no PATH (https://ffmpeg.org/download.html)
 
-cp .env.example .env     # preencha OPENROUTER_API_KEY (ou outro provedor) e API_SECRET_KEY
-run_backend.bat          # Linux/Mac: ./run_backend.sh  →  http://localhost:8000
+Copy-Item .env.example .env   # preencha OPENROUTER_API_KEY (ou outro provedor) e API_SECRET_KEY
+.un_backend.bat            # Linux/Mac: ./run_backend.sh  →  http://localhost:8000
+```
 
-# 2. Frontend
+```powershell
+# 2. Frontend (outro terminal)
 cd frontend-next
-cp .env.example .env.local   # NEXT_PUBLIC_API_URL, NEXT_PUBLIC_API_SECRET, chaves do Supabase
+Copy-Item .env.example .env.local   # NEXT_PUBLIC_API_URL, NEXT_PUBLIC_API_SECRET, chaves do Supabase
 npm install
 npm run dev                  # http://localhost:3000
 ```
 
-`dev.bat` sobe backend, ngrok e frontend em janelas separadas. A URL do backend e o token também podem ser
-trocados em **Configurações → Conexão**, sem redeploy.
+O login usa o Supabase. `API_SECRET_KEY` (backend) e `NEXT_PUBLIC_API_SECRET` (frontend) precisam ser iguais; senão o app mostra
+"API offline". Também dá para trocar a URL e o token em **Configurações → Conexão**, sem redeploy. `dev.bat` faz o mesmo que
+`dev_local.bat` e ainda sobe o ngrok.
+
+**Se todas as páginas derem 404 no `npm run dev`:** o cache do Next está velho (acontece depois de `npm run build` na mesma
+pasta). Pare o servidor, apague `frontend-next/.next` e suba de novo.
 
 ## Variáveis de ambiente (backend)
 
