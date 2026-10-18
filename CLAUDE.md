@@ -139,6 +139,8 @@ cd frontend-next; npm run lint; npx tsc --noEmit; npm run build
 
 **Limpo = pytest verde + 0 problemas de lint + 0 erros TypeScript + build OK.**
 
+O mesmo conjunto roda no GitHub Actions (`.github/workflows/ci.yml`) em todo PR e em `push` na `main`. O backend usa só `requirements-test.txt` (sem torch/whisper).
+
 ---
 
 ## 7. Fluxo do Pipeline
