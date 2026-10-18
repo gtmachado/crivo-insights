@@ -1,15 +1,12 @@
 """Refina a transcrição bruta formatando como diálogo com separação de participantes."""
-from pathlib import Path
+import logging
 
+from backend.services import prompt_store
 from backend.services.llm_client import call
 from backend.storage.filesystem import read_meta
 
-_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "refine_prompt.md"
+log = logging.getLogger("refiner")
 _CHUNK_CHARS = 12_000  # ~3k tokens — divide se a transcrição for muito longa
-
-
-def _load_prompt() -> str:
-    return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
 def _build_context_header(niche: str | None, interview_name: str | None) -> str:
@@ -61,7 +58,7 @@ def refine_transcription(
     niche: str | None = None,
     interview_name: str | None = None,
 ) -> str:
-    base_prompt = _load_prompt()
+    base_prompt = prompt_store.load("refine")
     context_header = _build_context_header(niche, interview_name)
     system_prompt = context_header + base_prompt if context_header else base_prompt
 
@@ -70,7 +67,7 @@ def refine_transcription(
 
     for i, chunk in enumerate(chunks, 1):
         if len(chunks) > 1:
-            print(f"  Refinando chunk {i}/{len(chunks)}...")
+            log.info("Refinando chunk %d/%d...", i, len(chunks))
         result = call(
             task="refine",
             system_prompt=system_prompt,

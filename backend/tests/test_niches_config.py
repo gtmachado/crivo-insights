@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.api.routes import config as config_routes
+from backend.services import prompt_store
 from backend.api.routes import niches
 
 
@@ -83,12 +83,12 @@ def test_modelos_vazio_remove_override(client):
 
 @pytest.fixture
 def prompts_dir(tmp_path, monkeypatch):
-    real = Path(config_routes._PROMPTS_DIR)
+    real = Path(prompt_store.PROMPTS_DIR)
     copy = tmp_path / "prompts"
     copy.mkdir()
     for f in real.glob("*.md"):
         shutil.copy(f, copy / f.name)
-    monkeypatch.setattr(config_routes, "_PROMPTS_DIR", copy)
+    monkeypatch.setattr(prompt_store, "PROMPTS_DIR", copy)
     return copy
 
 
@@ -112,3 +112,10 @@ def test_prompt_vazio_ou_desconhecido(client, prompts_dir):
     assert client.put("/config/prompts/refine", json={"content": "  "}).status_code == 400
     assert client.get("/config/prompts/inexistente").status_code == 404
     assert client.post("/config/prompts/glossary/restore").status_code == 409
+
+
+def test_openapi_documenta_todas_as_rotas(client):
+    schema = client.get("/openapi.json").json()
+    assert "/interviews/upload" in schema["paths"]
+    assert "/niches/{niche}/analyze" in schema["paths"]
+    assert not any("consolidate" in p for p in schema["paths"])

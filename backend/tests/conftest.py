@@ -3,7 +3,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.main import app
-from backend.api.routes import interviews, niches
+from backend.api.routes import niches
+from backend.services import interview_runner
 from backend.core.config import settings
 
 
@@ -13,7 +14,7 @@ def data_dir(tmp_path, monkeypatch):
     path.mkdir()
     monkeypatch.setattr(settings, "data_dir", path)
     monkeypatch.setattr(settings, "api_secret_key", None)
-    interviews.jobs.clear()
+    interview_runner.jobs.clear()
     niches.jobs.clear()
     return path
 

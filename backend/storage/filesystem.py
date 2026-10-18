@@ -1,9 +1,12 @@
 from pathlib import Path
 import json
+import os
 import re
 import shutil
+import tempfile
 
 from backend.core.config import settings
+from backend.core.layout import DOCS, META_FILENAME
 
 # Dirs reservados DENTRO do nicho — não são entrevistas, são consolidados.
 _NICHE_RESERVED = {"_insights", "_glossary"}
@@ -23,6 +26,24 @@ def _slugify(text: str) -> str:
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_-]+", "-", text)
     return text
+
+
+def write_text_atomic(path: Path, content: str) -> None:
+    """Grava via arquivo temporário + replace: leitores nunca veem um arquivo pela metade."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def upload_tmp_root() -> Path:
+    """Pasta de trabalho dos uploads em andamento (privada: nunca aparece como nicho)."""
+    return settings.data_dir / "_tmp"
 
 
 def niche_dir(niche: str) -> Path:
@@ -134,19 +155,13 @@ def list_interviews(niche: str) -> list[dict]:
     for d in sorted(base.iterdir()):
         if not _is_interview_dir(d):
             continue
-        stages = {
-            "raw":        (d / "outputs" / "01_transcricao_bruta.md").exists(),
-            "refined":    (d / "outputs" / "02_transcricao_refinada.md").exists(),
-            "structured": (d / "outputs" / "03_entrevista_estruturada.md").exists(),
-            "glossary":   (d / "glossary" / "glossario_local.md").exists(),
-        }
+        stages = {doc: (d / subdir / filename).exists() for doc, (subdir, filename) in DOCS.items()}
         result.append({"name": d.name, "stages": stages})
     return result
 
 
 def save_markdown(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    write_text_atomic(path, content)
 
 
 def read_markdown(path: Path) -> str:
@@ -172,16 +187,13 @@ def structured_docs_for_selected(
             continue
         seen.add(slug)
         d = base / slug
-        path = d / "outputs" / "03_entrevista_estruturada.md"
+        path = d.joinpath(*DOCS["structured"])
         if _is_interview_dir(d) and path.exists():
             result.append((slug, read_markdown(path)))
     return result
 
 
 # ── Metadata da entrevista ────────────────────────────────────────────────────
-
-META_FILENAME = "metadata.json"
-
 
 def read_meta(niche: str, interview_name: str) -> dict:
     """
@@ -205,34 +217,4 @@ def write_meta(niche: str, interview_name: str, data: dict) -> None:
     (use interview_dir para isso).
     """
     base = interview_path(niche, interview_name)
-    base.mkdir(parents=True, exist_ok=True)
-    path = base / META_FILENAME
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-# ── Configuração de modelos ───────────────────────────────────────────────────
-
-def _model_config_path() -> Path:
-    """data/config/models.json — runtime local, não versionado."""
-    return settings.data_dir.parent / "config" / "models.json"
-
-
-def read_model_config() -> dict[str, str]:
-    """
-    Lê modelos salvos via UI em data/config/models.json.
-    Retorna {} se o arquivo não existir — usa os defaults do código.
-    """
-    path = _model_config_path()
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-
-
-def write_model_config(data: dict[str, str]) -> None:
-    """Salva configuração de modelos em data/config/models.json."""
-    path = _model_config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_text_atomic(base / META_FILENAME, json.dumps(data, ensure_ascii=False, indent=2))

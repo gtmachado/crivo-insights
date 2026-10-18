@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel, Field
 
+from backend.api.schemas import AnalyzeNicheRequest, Document, JobStarted, NicheJob
 from backend.services.jobs import JobStore
 from backend.services.niche_analyzer import analyze_niche
 from backend.storage.filesystem import list_niches, niche_analysis_path, read_markdown
@@ -8,11 +8,6 @@ from backend.storage.filesystem import list_niches, niche_analysis_path, read_ma
 router = APIRouter(prefix="/niches", tags=["niches"])
 
 jobs = JobStore()
-
-
-class AnalyzeNicheRequest(BaseModel):
-    """Body do POST /niches/{niche}/analyze."""
-    interviews: list[str] = Field(min_length=1)
 
 
 def _run_analysis(job_id: str, niche: str, interviews: list[str]) -> None:
@@ -31,12 +26,12 @@ def _run_analysis(job_id: str, niche: str, interviews: list[str]) -> None:
         jobs.mutate(job_id, lambda job: finish_ok(job, str(out_path)))
 
 
-@router.get("/")
+@router.get("/", response_model=list[str])
 def get_niches():
     return list_niches()
 
 
-@router.post("/{niche}/analyze")
+@router.post("/{niche}/analyze", response_model=JobStarted)
 def analyze_niche_endpoint(
     niche: str,
     body: AnalyzeNicheRequest,
@@ -46,20 +41,20 @@ def analyze_niche_endpoint(
     Inicia a análise manual do nicho usando Claude Sonnet 4.6.
 
     Body: { "interviews": ["slug1", "slug2", ...] }
-    Retorna: { job_id }. Acompanhe via /niches/{niche}/analyze/status/{job_id}.
+    Acompanhe via /niches/{niche}/analyze/status/{job_id}.
     O resultado fica em data/niches/{nicho}/_insights/analise_{slug}.md.
     """
     # O job existe antes de a task começar: um GET de status logo após o POST
     # nunca recebe 404.
     job_id = jobs.create(kind="analysis", niche=niche, interviews=body.interviews, log=[])
     background_tasks.add_task(_run_analysis, job_id, niche, body.interviews)
-    return {
-        "job_id":  job_id,
-        "message": f"Análise do nicho '{niche}' iniciada com {len(body.interviews)} entrevista(s).",
-    }
+    return JobStarted(
+        job_id=job_id,
+        message=f"Análise do nicho '{niche}' iniciada com {len(body.interviews)} entrevista(s).",
+    )
 
 
-@router.get("/{niche}/analyze/status/{job_id}")
+@router.get("/{niche}/analyze/status/{job_id}", response_model=NicheJob)
 def analysis_status(niche: str, job_id: str):
     job = jobs.get(job_id)
     if job is None:
@@ -67,10 +62,10 @@ def analysis_status(niche: str, job_id: str):
     return job
 
 
-@router.get("/{niche}/analysis")
+@router.get("/{niche}/analysis", response_model=Document)
 def get_niche_analysis(niche: str):
-    """Retorna o conteúdo da análise consolidada manual do nicho."""
+    """Conteúdo da análise consolidada manual do nicho."""
     path = niche_analysis_path(niche)
     if not path.exists():
         raise HTTPException(404, "Análise do nicho ainda não gerada.")
-    return {"content": read_markdown(path)}
+    return Document(content=read_markdown(path))

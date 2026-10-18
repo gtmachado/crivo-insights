@@ -4,90 +4,54 @@ Camada unificada de acesso a LLMs.
 Suporta:
   - OpenRouter  (padrão) — compatível com OpenAI Chat Completions
   - Gemini      — via google-generativeai SDK
-  - Anthropic   — fallback opcional
+  - Anthropic   — API direta
 
 Uso:
     from backend.services.llm_client import call
 
-    text = call(
-        task="refine",
-        system_prompt="...",
-        user_content="...",
-    )
+    text = call(task="refine", system_prompt="...", user_content="...")
 """
-import time
 import logging
-from typing import Optional
+import time
+from typing import Callable, Optional
 
 from backend.core.config import settings
-from backend.storage.filesystem import read_model_config
+from backend.core.layout import LLM_TASKS
+from backend.services import model_config
 
 log = logging.getLogger("llm_client")
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s — %(message)s",
-    datefmt="%H:%M:%S",
-)
 
-# ─── Defaults por tarefa ───────────────────────────────────────────────────────
-# Modelos gratuitos ou baratos do OpenRouter (abril 2025)
-_OPENROUTER_DEFAULTS: dict[str, str] = {
-    # Todas as etapas LLM usam Sonnet 4.6 para máxima qualidade de transcrição e análise.
-    # Para reduzir custo, sobrescreva via .env: model_refine, model_glossary, etc.
-    "refine":               "anthropic/claude-sonnet-4.6",
-    "glossary":             "anthropic/claude-sonnet-4.6",
-    "structure":            "anthropic/claude-sonnet-4.6",
-}
-
-# Modelos que NÃO suportam system prompt separado (ex: Gemma via Google AI Studio)
-# O client vai mesclar system+user em uma única mensagem de usuário
-_NO_SYSTEM_PROMPT_MODELS = {
-    "google/gemma-3-4b-it:free",
-    "google/gemma-3-12b-it:free",
-    "google/gemma-3-27b-it:free",
-    "google/gemma-4-26b-a4b-it:free",
-    "google/gemma-4-31b-it:free",
-    "google/gemma-3n-e2b-it:free",
-    "google/gemma-3n-e4b-it:free",
-}
-
-_GEMINI_DEFAULTS: dict[str, str] = {
-    "refine":               "gemini-2.0-flash",
-    "glossary":             "gemini-2.0-flash",
-    "structure":            "gemini-2.0-flash",
-}
-
-_ANTHROPIC_DEFAULTS: dict[str, str] = {
-    "refine":               "claude-sonnet-4-6",
-    "glossary":             "claude-sonnet-4-6",
-    "structure":            "claude-sonnet-4-6",
+# ─── Defaults por provider ─────────────────────────────────────────────────────
+# Todas as etapas usam Sonnet 4.6 por padrão (qualidade de transcrição/análise).
+# Para reduzir custo, escolha outro modelo em /settings ou via .env (MODEL_*).
+_DEFAULT_MODEL: dict[str, str] = {
+    "openrouter": "anthropic/claude-sonnet-4.6",
+    "gemini":     "gemini-2.0-flash",
+    "anthropic":  "claude-sonnet-4-6",
 }
 
 _MAX_TOKENS = 8192
+_TIMEOUT_S = 300.0
+_RATE_LIMIT_DELAYS = (5, 15, 30)  # segundos entre tentativas em caso de 429
 
 
-def _resolve_model(task: str) -> str:
+def resolve_model(task: str) -> str:
     """
     Retorna o modelo a usar, em ordem de prioridade:
     1. data/config/models.json — salvo via UI (/settings)
-    2. .env override           — model_refine, model_structure, etc.
-    3. Defaults do provider    — _OPENROUTER_DEFAULTS / _GEMINI_DEFAULTS / _ANTHROPIC_DEFAULTS
+    2. .env override           — MODEL_REFINE, MODEL_STRUCTURE, MODEL_GLOSSARY
+    3. Default do provider ativo
     """
-    # 1. Config salva via UI
-    saved = read_model_config().get(task, "")
+    if task not in LLM_TASKS:
+        raise ValueError(f"Tarefa LLM desconhecida: '{task}'. Use: {', '.join(LLM_TASKS)}")
+
+    saved = model_config.read_saved().get(task)
     if saved:
         return saved
-    # 2. .env override
     override = settings.model_for(task)
     if override:
         return override
-    # 3. Defaults por provider
-    provider = settings.llm_provider
-    if provider == "gemini":
-        return _GEMINI_DEFAULTS.get(task, "gemini-2.0-flash")
-    if provider == "anthropic":
-        return _ANTHROPIC_DEFAULTS.get(task, "claude-haiku-4-5")
-    return _OPENROUTER_DEFAULTS.get(task, "mistralai/mistral-7b-instruct:free")
+    return _DEFAULT_MODEL.get(settings.llm_provider, _DEFAULT_MODEL["openrouter"])
 
 
 # ─── Providers ────────────────────────────────────────────────────────────────
@@ -105,38 +69,35 @@ def _call_openrouter(model: str, system_prompt: str, user_content: str) -> str:
             "HTTP-Referer": "https://crivo-insights.internal",
             "X-Title": "Crivo Insights",
         },
-        max_retries=0,  # gerenciamos manualmente abaixo
+        timeout=_TIMEOUT_S,
+        max_retries=0,  # gerenciamos 429 manualmente abaixo
     )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": user_content},
+    ]
 
-    # Alguns modelos (ex: Gemma via Google AI Studio) não aceitam system prompt separado
-    if model in _NO_SYSTEM_PROMPT_MODELS:
-        messages = [{"role": "user", "content": f"{system_prompt}\n\n---\n\n{user_content}"}]
-    else:
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_content},
-        ]
-
-    delays = [5, 15, 30]  # segundos entre tentativas em caso de 429
-    last_exc = None
-    for attempt, delay in enumerate([0] + delays, 1):
-        if delay:
-            log.warning("Rate limit (429) — aguardando %ds antes da tentativa %d/%d...", delay, attempt, len(delays)+1)
-            time.sleep(delay)
+    attempts = len(_RATE_LIMIT_DELAYS) + 1
+    for attempt in range(1, attempts + 1):
         try:
             resp = client.chat.completions.create(
-                model=model,
-                max_tokens=_MAX_TOKENS,
-                messages=messages,
+                model=model, max_tokens=_MAX_TOKENS, messages=messages,
             )
-            return resp.choices[0].message.content.strip()
-        except RateLimitError as e:
-            last_exc = e
-            if attempt == len(delays) + 1:
+        except RateLimitError:
+            if attempt == attempts:
                 raise
+            delay = _RATE_LIMIT_DELAYS[attempt - 1]
+            log.warning("Rate limit (429) — aguardando %ds antes da tentativa %d/%d...",
+                        delay, attempt + 1, attempts)
+            time.sleep(delay)
             continue
 
-    raise last_exc
+        choice = resp.choices[0]
+        if choice.finish_reason == "length":
+            log.warning("Resposta truncada pelo limite de %d tokens (modelo %s).", _MAX_TOKENS, model)
+        return choice.message.content or ""
+
+    raise RuntimeError("unreachable")  # pragma: no cover — o loop sempre retorna ou levanta
 
 
 def _call_gemini(model: str, system_prompt: str, user_content: str) -> str:
@@ -146,12 +107,9 @@ def _call_gemini(model: str, system_prompt: str, user_content: str) -> str:
         raise EnvironmentError("GEMINI_API_KEY não configurada.")
 
     genai.configure(api_key=settings.gemini_api_key)
-    gmodel = genai.GenerativeModel(
-        model_name=model,
-        system_instruction=system_prompt,
-    )
-    resp = gmodel.generate_content(user_content)
-    return resp.text.strip()
+    gmodel = genai.GenerativeModel(model_name=model, system_instruction=system_prompt)
+    resp = gmodel.generate_content(user_content, request_options={"timeout": _TIMEOUT_S})
+    return resp.text
 
 
 def _call_anthropic(model: str, system_prompt: str, user_content: str) -> str:
@@ -160,17 +118,55 @@ def _call_anthropic(model: str, system_prompt: str, user_content: str) -> str:
     if not settings.anthropic_api_key:
         raise EnvironmentError("ANTHROPIC_API_KEY não configurada.")
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=_TIMEOUT_S)
     msg = client.messages.create(
         model=model,
         max_tokens=_MAX_TOKENS,
         system=system_prompt,
         messages=[{"role": "user", "content": user_content}],
     )
-    return msg.content[0].text.strip()
+    if msg.stop_reason == "max_tokens":
+        log.warning("Resposta truncada pelo limite de %d tokens (modelo %s).", _MAX_TOKENS, model)
+    return "".join(block.text for block in msg.content if getattr(block, "type", "") == "text")
 
 
-# ─── Ponto de entrada ─────────────────────────────────────────────────────────
+_PROVIDERS: dict[str, Callable[[str, str, str], str]] = {
+    "openrouter": _call_openrouter,
+    "gemini":     _call_gemini,
+    "anthropic":  _call_anthropic,
+}
+
+
+# ─── Pontos de entrada ────────────────────────────────────────────────────────
+
+def _invoke(
+    label: str,
+    provider: str,
+    model: str,
+    system_prompt: str,
+    user_content: str,
+    metadata: Optional[dict],
+) -> str:
+    """Executa uma chamada com log de tempo/tamanho e validação de resposta vazia."""
+    fn = _PROVIDERS.get(provider)
+    if fn is None:
+        raise ValueError(f"Provider desconhecido: '{provider}'. Use {' | '.join(_PROVIDERS)}")
+
+    meta_str = f" [{metadata}]" if metadata else ""
+    log.info("LLM call | %s provider=%s model=%s%s | input=%d chars",
+             label, provider, model, meta_str, len(user_content))
+    t0 = time.perf_counter()
+    try:
+        result = fn(model, system_prompt, user_content).strip()
+        if not result:
+            raise RuntimeError("o modelo devolveu uma resposta vazia")
+    except Exception as exc:
+        log.error("LLM ERRO | %s provider=%s model=%s | %.1fs | %s",
+                  label, provider, model, time.perf_counter() - t0, exc)
+        raise
+    log.info("LLM done | %s %.1fs | output=%d chars", label, time.perf_counter() - t0, len(result))
+    return result
+
 
 def call_with_model(
     provider: str,
@@ -182,39 +178,10 @@ def call_with_model(
     """
     Chama um (provider, model) específico, ignorando settings.llm_provider.
 
-    Útil quando uma tarefa exige um modelo fixo independentemente da config
-    global do projeto — caso típico: análise de nicho que precisa
-    obrigatoriamente de Claude Sonnet 4.6.
+    Para tarefas que exigem um modelo fixo independentemente da config global —
+    caso da análise de nicho, que precisa obrigatoriamente de Claude Sonnet 4.6.
     """
-    meta_str = f" [{metadata}]" if metadata else ""
-    log.info(
-        "LLM call_with_model | provider=%-12s model=%s%s | input=%d chars",
-        provider, model, meta_str, len(user_content),
-    )
-    t0 = time.perf_counter()
-    try:
-        if provider == "openrouter":
-            result = _call_openrouter(model, system_prompt, user_content)
-        elif provider == "anthropic":
-            result = _call_anthropic(model, system_prompt, user_content)
-        elif provider == "gemini":
-            result = _call_gemini(model, system_prompt, user_content)
-        else:
-            raise ValueError(f"Provider desconhecido: '{provider}'.")
-
-        elapsed = time.perf_counter() - t0
-        log.info(
-            "LLM done (forced) | provider=%-12s model=%s | %.1fs | output=%d chars",
-            provider, model, elapsed, len(result),
-        )
-        return result
-    except Exception as exc:
-        elapsed = time.perf_counter() - t0
-        log.error(
-            "LLM ERRO (forced) | provider=%s model=%s | %.1fs | %s",
-            provider, model, elapsed, exc,
-        )
-        raise
+    return _invoke("forced", provider, model, system_prompt, user_content, metadata)
 
 
 def call(
@@ -226,48 +193,14 @@ def call(
     """
     Chama o LLM configurado para a tarefa e retorna o texto gerado.
 
-    Parâmetros:
-        task          — "refine" | "structure" | "glossary"
-        system_prompt — prompt de sistema (carregado do arquivo .md pelo service)
-        user_content  — conteúdo do usuário (transcrição, docs etc.)
-        metadata      — dict opcional para logging (ex: {"interview": "João Silva"})
-
-    Raises:
-        RuntimeError  — com mensagem clara se o provider falhar
+    task: "refine" | "structure" | "glossary".
+    Raises RuntimeError com mensagem clara se o provider falhar.
     """
     provider = settings.llm_provider
-    model = _resolve_model(task)
-    meta_str = f" [{metadata}]" if metadata else ""
-
-    log.info(
-        "LLM call | task=%-22s provider=%-12s model=%s%s | input=%d chars",
-        task, provider, model, meta_str, len(user_content),
-    )
-    t0 = time.perf_counter()
-
+    model = resolve_model(task)
     try:
-        if provider == "openrouter":
-            result = _call_openrouter(model, system_prompt, user_content)
-        elif provider == "gemini":
-            result = _call_gemini(model, system_prompt, user_content)
-        elif provider == "anthropic":
-            result = _call_anthropic(model, system_prompt, user_content)
-        else:
-            raise ValueError(f"Provider desconhecido: '{provider}'. Use openrouter | gemini | anthropic")
-
-        elapsed = time.perf_counter() - t0
-        log.info(
-            "LLM done  | task=%-22s %.1fs | output=%d chars",
-            task, elapsed, len(result),
-        )
-        return result
-
+        return _invoke(f"task={task}", provider, model, system_prompt, user_content, metadata)
     except Exception as exc:
-        elapsed = time.perf_counter() - t0
-        log.error(
-            "LLM ERRO  | task=%-22s provider=%s model=%s | %.1fs | %s",
-            task, provider, model, elapsed, exc,
-        )
         raise RuntimeError(
             f"Falha na etapa '{task}' com provider '{provider}' / modelo '{model}'.\n"
             f"Arquivos anteriores foram preservados. Corrija o erro e reprocesse.\n"

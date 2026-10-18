@@ -2,7 +2,7 @@ import io
 
 import pytest
 
-from backend.api.routes import interviews
+from backend.services import interview_runner
 from backend.storage.filesystem import interview_path, read_meta, write_meta
 
 
@@ -19,7 +19,7 @@ def fake_pipeline(monkeypatch):
         on_step("✓ Pipeline concluído com sucesso.")
         return {"original": input_file}
 
-    monkeypatch.setattr(interviews, "run_pipeline", run)
+    monkeypatch.setattr(interview_runner, "run_pipeline", run)
 
 
 def _upload(client, filename="ent.mp3", name="Ent 01", niche="Saúde", **extra):
@@ -46,7 +46,7 @@ def _upload(client, filename="ent.mp3", name="Ent 01", niche="Saúde", **extra):
     ],
 )
 def test_classify_stage_com_mensagens_reais_do_pipeline(msg, stage):
-    assert interviews._classify_stage(msg) == stage
+    assert interview_runner.classify_stage(msg) == stage
 
 
 # ── Upload e jobs ─────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ def test_upload_erro_do_pipeline_marca_stage_e_job(client, monkeypatch, data_dir
         on_step("Convertendo para WAV (16kHz mono)...")
         raise RuntimeError("ffmpeg quebrou")
 
-    monkeypatch.setattr(interviews, "run_pipeline", boom)
+    monkeypatch.setattr(interview_runner, "run_pipeline", boom)
     job = client.get(f"/interviews/status/{_upload(client).json()['job_id']}").json()
     assert job["status"] == "error"
     convert = next(s for s in job["stages"] if s["id"] == "convert")

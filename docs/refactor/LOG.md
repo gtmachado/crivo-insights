@@ -90,3 +90,44 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
   - **Nichos antigos:** arquivos consolidados antigos em `data/niches/*/_insights` e `_glossary` ficam intactos no disco (nenhum dado foi tocado). A análise de nicho continua gravando em `_insights/analise_{slug}.md`.
   - **Sem proteção em dev:** com `API_SECRET_KEY` vazio a API continua sem proteção; isso é intencional para dev local.
   - **Pendências para a E2:** `llm_client` (provider e retry) e `prompt_store`.
+
+---
+
+## E2 — Backend: reorganização estrutural
+
+- **O quê:** `core/pipeline.py` continua intocado (`git diff` vazio).
+  - **Fonte única:**
+    - `core/layout.py` concentra `DOCS` (nomes de arquivo), `LLM_TASKS`, o nome do meta e os modelos fixos da análise de nicho;
+    - substitui as cópias que existiam em `interviews.py`, `filesystem.py`, `config.py`, `main.py` e `niche_analyzer.py`;
+    - um teste compara `DOCS` com os literais do `pipeline.py`, então qualquer divergência quebra o build.
+  - **Services novos:**
+    - `services/interview_runner.py`: tudo o que era `_run_job` e a lógica de etapas em `routes/interviews.py`; o contrato dos prefixos das mensagens do pipeline foi preservado e testado;
+    - `services/prompt_store.py`: prompts com captura do padrão, backup e restore; escrita atômica; os services de refine, structure, glossary e niche_analysis carregam por ele;
+    - `services/model_config.py`: overrides da UI e allowlist; ignora chaves legadas no JSON e tolera JSON corrompido.
+  - **`llm_client`:**
+    - `resolve_model` público, com `ValueError` para tarefa desconhecida; os fallbacks `mistral:free` e `haiku` foram removidos;
+    - `call` e `call_with_model` compartilham `_invoke` (log, tempo, validação);
+    - resposta vazia e `content None` viram erro claro;
+    - truncamento por max_tokens gera aviso no log;
+    - timeout de 300 s nos três providers;
+    - retry de 429 simplificado;
+    - `_NO_SYSTEM_PROMPT_MODELS` removido; o `basicConfig` saiu do import e foi para `main.py`.
+  - **Storage:** `write_text_atomic` (tmp + `os.replace`) em markdown, meta, prompts e modelos; `upload_tmp_root()`; model config saiu do `filesystem.py`.
+  - **API:**
+    - `api/schemas.py` com `response_model` em todos os endpoints;
+    - `routes/system.py` com `/status` e `/pipeline/jobs`;
+    - rotas finas (`interviews.py` caiu de 388 para cerca de 190 linhas, `config.py` de 184 para cerca de 95).
+  - **Logging:** `print` virou `logging` em `converter`, `transcriber` e `refiner`; `import struct` morto removido.
+- **Por quê:** uma só fonte de verdade para nomes e tarefas, rotas sem lógica de negócio e um cliente LLM sem duplicação.
+- **Arquivos:** `backend/core/layout.py`, `backend/api/{main,schemas}.py`, `backend/api/routes/{interviews,niches,config,system}.py`, `backend/services/{interview_runner,prompt_store,model_config,llm_client,niche_analyzer,refiner,structurer,glossary,converter,transcriber}.py`, `backend/storage/filesystem.py`, `backend/tests/*`.
+- **Evidência dos gates:**
+  - `py_compile`: OK;
+  - `pytest`: **89 passed**;
+  - `git diff -- backend/core/pipeline.py`: vazio.
+- **Riscos e pendências:**
+  - **Contrato do frontend:** os `response_model` expõem exatamente os campos antigos; a E3 revisa `api.ts` contra eles.
+  - **`/openapi.json` e `/docs`:** continuam públicos mesmo com `API_SECRET_KEY` (só descrevem o schema, sem dados).
+  - **Itens de baixa prioridade deixados:**
+    - Whisper compartilhado entre threads sem lock;
+    - SDK deprecado do Gemini;
+    - `_ffmpeg_available()` chamado a cada uso.

@@ -1,8 +1,11 @@
 """Transcreve arquivos WAV usando Whisper local."""
-from pathlib import Path
+import logging
 from functools import lru_cache
+from pathlib import Path
 
 from backend.core.config import settings
+
+log = logging.getLogger("transcriber")
 
 
 @lru_cache(maxsize=1)
@@ -20,7 +23,7 @@ def transcribe_file(wav_path: Path) -> str:
 def transcribe_chunks(chunks: list[Path]) -> str:
     parts: list[str] = []
     for i, chunk in enumerate(chunks, 1):
-        print(f"  Transcrevendo parte {i}/{len(chunks)}: {chunk.name}")
+        log.info("Transcrevendo parte %d/%d: %s", i, len(chunks), chunk.name)
         text = transcribe_file(chunk)
         parts.append(text)
     return "\n\n".join(parts)
