@@ -1,4 +1,5 @@
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
+import type { Stage } from "./pipeline";
 
 // ── Resolução da URL e do secret ──────────────────────────────────────────────
 // Ordem: localStorage (configurado pelo usuário) → env var → fallback localhost
@@ -25,24 +26,73 @@ export function setApiConfig(url: string, secret: string) {
   else        window.localStorage.removeItem(LS_KEY_URL);
   if (secret) window.localStorage.setItem(LS_KEY_SECRET, secret.trim());
   else        window.localStorage.removeItem(LS_KEY_SECRET);
-  // Atualiza axios in-place para próximas requisições
-  api.defaults.baseURL = getApiUrl();
-  api.defaults.headers["Authorization"] = `Bearer ${getApiSecret()}`;
+  applyConfig();
 }
 
 export const api = axios.create({
   baseURL: getApiUrl(),
-  headers: {
-    Authorization: `Bearer ${getApiSecret()}`,
-    "ngrok-skip-browser-warning": "true",
-  },
+  headers: { "ngrok-skip-browser-warning": "true" },
 });
 
-// Hidrata após mount no client (env serve como fallback no SSR)
-if (typeof window !== "undefined") {
+/** Atualiza baseURL e Authorization no axios (lê localStorage → env). */
+function applyConfig() {
   api.defaults.baseURL = getApiUrl();
-  api.defaults.headers["Authorization"] = `Bearer ${getApiSecret()}`;
+  const secret = getApiSecret();
+  if (secret) api.defaults.headers["Authorization"] = `Bearer ${secret}`;
+  else delete api.defaults.headers["Authorization"];
 }
+
+// Hidrata após mount no client (env serve como fallback no SSR).
+applyConfig();
+
+// ── Erros ─────────────────────────────────────────────────────────────────────
+
+/** Erro normalizado: `message` já é o `detail` do FastAPI (ou algo legível). */
+export class ApiError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+type ValidationItem = { loc?: (string | number)[]; msg?: string };
+
+function messageFromError(err: unknown): { message: string; status?: number } {
+  if (!isAxiosError(err)) {
+    return { message: err instanceof Error ? err.message : "Erro desconhecido." };
+  }
+  const status = err.response?.status;
+  if (!err.response) {
+    return { message: "Não foi possível conectar ao servidor. Verifique a URL em Configurações." };
+  }
+  const detail = (err.response.data as { detail?: string | ValidationItem[] } | undefined)?.detail;
+  if (typeof detail === "string") return { message: detail, status };
+  if (Array.isArray(detail) && detail.length) {
+    return { message: detail.map((d) => d.msg ?? "valor inválido").join("; "), status };
+  }
+  if (status === 401) return { message: "Token de acesso inválido. Confira o secret em Configurações.", status };
+  return { message: err.message, status };
+}
+
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    const { message, status } = messageFromError(err);
+    return Promise.reject(new ApiError(message, status));
+  },
+);
+
+/** Mensagem pronta para toast, aceitando qualquer valor capturado em um catch. */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Erro desconhecido.";
+}
+
+// ── Helpers de rota ───────────────────────────────────────────────────────────
+
+const seg = encodeURIComponent;
+const nichePath = (niche: string) => `/niches/${seg(niche)}`;
+const interviewPath = (niche: string, interview: string) =>
+  `/interviews/${seg(niche)}/${seg(interview)}`;
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -52,10 +102,8 @@ export type Niche = string;
  * Metadata de uma entrevista. Todos os campos são opcionais para manter
  * compatibilidade com entrevistas anteriores ao GSD-002 (sem metadata.json).
  *
- * FUTURO (BL-007 / Supabase Auth): quando autenticação for implementada,
- * interviewer_user_id será derivado do JWT pelo backend.
- * interviewer_name virá do perfil Supabase. O campo já existe aqui para
- * facilitar a migração sem breaking change.
+ * FUTURO (BL-007 / Supabase Auth): interviewer_user_id será derivado do JWT
+ * pelo backend e interviewer_name virá do perfil Supabase.
  */
 export type InterviewMeta = {
   title?: string;
@@ -72,12 +120,15 @@ export type InterviewMeta = {
   updated_at?: string;
 };
 
+/** Quais documentos já existem (gerados pelo pipeline). */
 export type InterviewStages = {
   raw: boolean;
   refined: boolean;
   structured: boolean;
   glossary: boolean;
 };
+
+export type DocType = keyof InterviewStages;
 
 export type Interview = {
   name: string;
@@ -86,17 +137,6 @@ export type Interview = {
 
 export type JobStatus = "running" | "done" | "error";
 
-export type JobStage = {
-  id: "upload" | "convert" | "transcribe" | "refine" | "structure" | "glossary";
-  label: string;
-  status: "pending" | "processing" | "done" | "error";
-  started_at?: number | null;
-  ended_at?: number | null;
-  logs?: string[];
-  model?: string | null;
-  error?: string | null;
-};
-
 export type Job = {
   job_id: string;
   niche: string;
@@ -104,11 +144,10 @@ export type Job = {
   status: JobStatus;
   log: string[];
   paths: Record<string, string>;
-  /** Lista de stages com tempos/modelo/logs por etapa. Pode estar ausente em
-   * jobs antigos da memória (compat). */
-  stages?: JobStage[];
-  started_at?: number | null;
-  ended_at?: number | null;
+  /** Etapas com tempos/modelo/logs, sempre presentes no backend atual. */
+  stages: Stage[];
+  started_at: number;
+  ended_at: number | null;
 };
 
 export type SystemStatus = {
@@ -127,7 +166,7 @@ export const getNiches = () =>
 // ── Entrevistas ───────────────────────────────────────────────────────────────
 
 export const getInterviews = (niche: string) =>
-  api.get<Interview[]>(`/interviews/${encodeURIComponent(niche)}`).then((r) => r.data);
+  api.get<Interview[]>(`/interviews/${seg(niche)}`).then((r) => r.data);
 
 /** Campos de metadata enviados junto com o upload. Todos opcionais. */
 export type UploadMetadata = Pick<
@@ -139,6 +178,16 @@ export type UploadMetadata = Pick<
   | "interviewer_name"
   | "notes"
 >;
+
+/** Campo do form multipart de cada metadata (o backend salva metadata.json antes do pipeline). */
+const UPLOAD_META_FIELDS: Record<keyof UploadMetadata, string> = {
+  title:             "meta_title",
+  interviewee_name:  "meta_interviewee_name",
+  interviewee_phone: "meta_interviewee_phone",
+  interviewee_email: "meta_interviewee_email",
+  interviewer_name:  "meta_interviewer_name",
+  notes:             "meta_notes",
+};
 
 export const uploadInterview = (
   file: File,
@@ -152,49 +201,40 @@ export const uploadInterview = (
   form.append("niche", niche);
   form.append("interview_name", interviewName);
 
-  // Metadata — campos opcionais. Backend salva metadata.json antes do pipeline.
-  if (metadata?.title)              form.append("meta_title",               metadata.title);
-  if (metadata?.interviewee_name)   form.append("meta_interviewee_name",    metadata.interviewee_name);
-  if (metadata?.interviewee_phone)  form.append("meta_interviewee_phone",   metadata.interviewee_phone);
-  if (metadata?.interviewee_email)  form.append("meta_interviewee_email",   metadata.interviewee_email);
-  if (metadata?.interviewer_name)   form.append("meta_interviewer_name",    metadata.interviewer_name);
-  if (metadata?.notes)              form.append("meta_notes",               metadata.notes);
+  for (const key of Object.keys(UPLOAD_META_FIELDS) as (keyof UploadMetadata)[]) {
+    const value = metadata?.[key];
+    if (value) form.append(UPLOAD_META_FIELDS[key], value);
+  }
 
-  return api.post<{ job_id: string; message: string }>("/interviews/upload", form, {
-    headers: { "Content-Type": "multipart/form-data" },
-    onUploadProgress: (e) => {
-      if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
-    },
-  }).then((r) => r.data);
+  return api
+    .post<{ job_id: string; message: string }>("/interviews/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+      },
+    })
+    .then((r) => r.data);
 };
-
-export const getJobStatus = (jobId: string) =>
-  api.get<Job>(`/interviews/status/${jobId}`).then((r) => r.data);
 
 export const getAllJobs = () =>
   api.get<Job[]>("/pipeline/jobs").then((r) => r.data);
 
 // ── Documentos ────────────────────────────────────────────────────────────────
 
-export type DocType = "raw" | "refined" | "structured" | "glossary";
-export type EditableDocType = DocType;
-
 export const getDocument = (niche: string, interview: string, doc: DocType) =>
   api
-    .get<{ content: string }>(
-      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${doc}`,
-    )
+    .get<{ content: string }>(`${interviewPath(niche, interview)}/${doc}`)
     .then((r) => r.data.content);
 
 export const updateDocument = (
   niche: string,
   interview: string,
-  doc: EditableDocType,
+  doc: DocType,
   content: string,
 ) =>
   api
     .put<{ ok: boolean; path: string; size: number }>(
-      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${doc}`,
+      `${interviewPath(niche, interview)}/${doc}`,
       { content },
     )
     .then((r) => r.data);
@@ -219,27 +259,21 @@ export type InterviewFiles = Record<InterviewSubdir, FileEntry[]>;
 
 export const getInterviewFiles = (niche: string, interview: string) =>
   api
-    .get<InterviewFiles>(
-      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/files`,
-    )
+    .get<InterviewFiles>(`${interviewPath(niche, interview)}/files`)
     .then((r) => r.data);
 
 // ── Exclusão de entrevista ────────────────────────────────────────────────────
 
 export const deleteInterview = (niche: string, interview: string) =>
   api
-    .delete<{ ok: boolean; deleted: boolean }>(
-      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}`,
-    )
+    .delete<{ ok: boolean; deleted: boolean }>(interviewPath(niche, interview))
     .then((r) => r.data);
 
 // ── Metadata da entrevista (GSD-002) ─────────────────────────────────────────
 
 export const getInterviewMeta = (niche: string, interview: string) =>
   api
-    .get<InterviewMeta>(
-      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/meta`,
-    )
+    .get<InterviewMeta>(`${interviewPath(niche, interview)}/meta`)
     .then((r) => r.data);
 
 export const updateInterviewMeta = (
@@ -248,30 +282,13 @@ export const updateInterviewMeta = (
   meta: Partial<InterviewMeta>,
 ) =>
   api
-    .put<{ ok: boolean }>(
-      `/interviews/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/meta`,
-      meta,
-    )
+    .put<{ ok: boolean }>(`${interviewPath(niche, interview)}/meta`, meta)
     .then((r) => r.data);
 
-// ── Consolidação ──────────────────────────────────────────────────────────────
-
-export const consolidateInsights = (niche: string) =>
-  api.post<{ job_id: string }>(`/niches/${encodeURIComponent(niche)}/consolidate/insights`).then((r) => r.data);
-
-export const consolidateGlossary = (niche: string) =>
-  api.post<{ job_id: string }>(`/niches/${encodeURIComponent(niche)}/consolidate/glossary`).then((r) => r.data);
-
-export const getConsolidatedInsights = (niche: string) =>
-  api.get<{ content: string }>(`/niches/${encodeURIComponent(niche)}/insights`).then((r) => r.data.content);
-
-export const getConsolidatedGlossary = (niche: string) =>
-  api.get<{ content: string }>(`/niches/${encodeURIComponent(niche)}/glossary`).then((r) => r.data.content);
-
-// ── Análise manual de nicho (Fase 4) ──────────────────────────────────────────
+// ── Análise de nicho ──────────────────────────────────────────────────────────
 
 export type NicheAnalysisJob = {
-  status: "running" | "done" | "error";
+  status: JobStatus;
   kind: "analysis";
   niche: string;
   interviews: string[];
@@ -281,24 +298,17 @@ export type NicheAnalysisJob = {
 
 export const analyzeNiche = (niche: string, interviews: string[]) =>
   api
-    .post<{ job_id: string; message: string }>(
-      `/niches/${encodeURIComponent(niche)}/analyze`,
-      { interviews },
-    )
+    .post<{ job_id: string; message: string }>(`${nichePath(niche)}/analyze`, { interviews })
     .then((r) => r.data);
 
 export const getNicheAnalysisJob = (niche: string, jobId: string) =>
   api
-    .get<NicheAnalysisJob>(
-      `/niches/${encodeURIComponent(niche)}/analyze/status/${encodeURIComponent(jobId)}`,
-    )
+    .get<NicheAnalysisJob>(`${nichePath(niche)}/analyze/status/${seg(jobId)}`)
     .then((r) => r.data);
 
 export const getNicheAnalysis = (niche: string) =>
   api
-    .get<{ content: string }>(
-      `/niches/${encodeURIComponent(niche)}/analysis`,
-    )
+    .get<{ content: string }>(`${nichePath(niche)}/analysis`)
     .then((r) => r.data.content);
 
 // ── Sistema ───────────────────────────────────────────────────────────────────
@@ -311,7 +321,7 @@ export const getSystemStatus = () =>
 export type ModelConfig = {
   /** Overrides salvos em data/config/models.json */
   saved: Record<string, string>;
-  /** Modelo efetivo em runtime por etapa (saved → .env → default do código) */
+  /** Modelo efetivo em runtime por etapa (saved → .env → default do provider) */
   effective: Record<string, string>;
   /** Lista de modelos permitidos no dropdown */
   allowed_models: string[];
@@ -323,8 +333,6 @@ export type ModelConfigUpdate = {
   refine?: string;
   structure?: string;
   glossary?: string;
-  consolidate?: string;
-  consolidate_glossary?: string;
 };
 
 export const getModelConfig = () =>
@@ -352,16 +360,14 @@ export const getPrompts = () =>
   api.get<PromptInfo[]>("/config/prompts").then((r) => r.data);
 
 export const getPrompt = (name: string) =>
-  api.get<PromptContent>(`/config/prompts/${encodeURIComponent(name)}`).then((r) => r.data);
+  api.get<PromptContent>(`/config/prompts/${seg(name)}`).then((r) => r.data);
 
 export const updatePrompt = (name: string, content: string) =>
-  api
-    .put<{ ok: boolean }>(`/config/prompts/${encodeURIComponent(name)}`, { content })
-    .then((r) => r.data);
+  api.put<{ ok: boolean }>(`/config/prompts/${seg(name)}`, { content }).then((r) => r.data);
 
 export const restorePrompt = (name: string) =>
   api
-    .post<{ ok: boolean; restored: boolean }>(`/config/prompts/${encodeURIComponent(name)}/restore`)
+    .post<{ ok: boolean; restored: boolean }>(`/config/prompts/${seg(name)}/restore`)
     .then((r) => r.data);
 
 /**
@@ -373,11 +379,10 @@ export const restorePrompt = (name: string) =>
  * intersticial do ngrok free.
  */
 export const mediaUrl = (niche: string, interview: string, filename: string) => {
-  const url = `${getApiUrl()}/media/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/${encodeURIComponent(filename)}`;
+  const url = `${getApiUrl()}/media/${seg(niche)}/${seg(interview)}/${seg(filename)}`;
   const params = new URLSearchParams();
   const token = getApiSecret();
   if (token) params.set("token", token);
   params.set("ngrok-skip-browser-warning", "true");
-  const qs = params.toString();
-  return qs ? `${url}?${qs}` : url;
+  return `${url}?${params.toString()}`;
 };

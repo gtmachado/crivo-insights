@@ -7,8 +7,10 @@
  *     em /interviews/{niche} (raw/refined/structured/glossary). Aqui
  *     reconstruímos uma timeline "achatada" sem tempos/logs.
  *
- * Mantém em sync com `PIPELINE_STAGES` em backend/api/routes/interviews.py.
+ * Mantém em sync com `PIPELINE_STAGES` em backend/services/interview_runner.py.
  */
+
+import type { InterviewStages } from "./api";
 
 export type StageStatus = "pending" | "processing" | "done" | "error";
 
@@ -74,12 +76,7 @@ export const STAGE_HINTS: Record<StageId, string> = {
  * Convenção: se `raw` está done, todas as 3 primeiras stages (upload, convert,
  * transcribe) são done — o pipeline não pode ter pulado etapas anteriores.
  */
-export function stagesFromInterview(stages: {
-  raw: boolean;
-  refined: boolean;
-  structured: boolean;
-  glossary: boolean;
-}): Stage[] {
+export function stagesFromInterview(stages: InterviewStages): Stage[] {
   return [
     { id: "upload",     label: STAGE_LABELS.upload,     status: stages.raw        ? "done" : "pending" },
     { id: "convert",    label: STAGE_LABELS.convert,    status: stages.raw        ? "done" : "pending" },

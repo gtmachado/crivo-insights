@@ -76,6 +76,13 @@ export function parseGlossaryMarkdown(md: string): GlossaryTerm[] {
 
 // ── Helpers de UI ────────────────────────────────────────────────────────────
 
+/** Marcas de acento combinadas (0x300–0x36F) deixadas por normalize("NFD"). Montada por código para não depender de caracteres invisíveis no fonte. */
+const DIACRITICS = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, "g");
+
+function stripAccents(text: string): string {
+  return text.normalize("NFD").replace(DIACRITICS, "");
+}
+
 /**
  * Devolve a primeira letra normalizada (sem acento, maiúscula) — usada
  * pra agrupar termos em colunas A-Z.
@@ -84,7 +91,7 @@ export function initialOf(term: string): string {
   if (!term) return "#";
   const first = term
     .normalize("NFD")
-    .replace(/̀-ͯ/g, "")
+    .replace(DIACRITICS, "")
     .charAt(0)
     .toUpperCase();
   return /[A-Z]/.test(first) ? first : "#";
@@ -115,16 +122,8 @@ export function availableInitials(terms: GlossaryTerm[]): string[] {
  */
 export function filterTerms(terms: GlossaryTerm[], query: string): GlossaryTerm[] {
   if (!query.trim()) return terms;
-  const q = query
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/̀-ͯ/g, "");
-  const matches = (s: string) =>
-    s
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/̀-ͯ/g, "")
-      .includes(q);
+  const q = stripAccents(query.toLowerCase());
+  const matches = (s: string) => stripAccents(s.toLowerCase()).includes(q);
   return terms.filter(
     (t) => matches(t.term) || matches(t.definition) || matches(t.example),
   );

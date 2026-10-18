@@ -3,27 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getInterviews,
-  consolidateInsights,
-  consolidateGlossary,
-  getConsolidatedInsights,
-  getConsolidatedGlossary,
-  type Interview,
-} from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { getInterviews, type Interview } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { GlossaryPanel } from "@/components/glossary/GlossaryPanel";
-import { MarkdownPreview } from "@/components/markdown/MarkdownPreview";
 import { AnalyzeNicheButton } from "@/components/niche/AnalyzeNicheButton";
 import { NicheAnalysisTab } from "@/components/niche/NicheAnalysisTab";
 import {
-  Loader2, FileText, CheckCircle2, Clock, Sparkles, BookOpen,
-  ChevronRight, AlertCircle, Brain, ListChecks, Archive,
+  Loader2, FileText, CheckCircle2, Clock,
+  ChevronRight, AlertCircle, Brain, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,101 +33,12 @@ function StageDot({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-// ── Botões legados de consolidação ────────────────────────────────────────────
-
-function ConsolidateButton({
-  label, icon: Icon, onClick, isPending, jobId,
-}: {
-  label: string;
-  icon: React.ElementType;
-  onClick: () => void;
-  isPending: boolean;
-  jobId?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={isPending}
-      className="flex items-center gap-2 rounded-md border border-border bg-background hover:bg-accent px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {isPending ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-      ) : (
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      )}
-      <span>{isPending ? "Processando…" : label}</span>
-      {jobId && (
-        <span className="text-[10px] text-muted-foreground font-mono ml-1">#{jobId}</span>
-      )}
-    </button>
-  );
-}
-
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-
-function ConsolidatedInsightsTab({ niche }: { niche: string }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["consolidated-insights", niche],
-    queryFn: () => getConsolidatedInsights(niche),
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  if (isLoading) return (
-    <div className="flex items-center justify-center h-48">
-      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-    </div>
-  );
-  if (isError || !data) return (
-    <div className="flex flex-col items-center justify-center h-48 gap-2">
-      <AlertCircle className="h-6 w-6 text-muted-foreground/40" />
-      <p className="text-sm text-muted-foreground text-center">
-        Ainda não consolidado. Use o botão acima para gerar.
-      </p>
-    </div>
-  );
-  return (
-    <ScrollArea className="h-full">
-      <div className="p-6">
-        <MarkdownPreview content={data} />
-      </div>
-    </ScrollArea>
-  );
-}
-
-function ConsolidatedGlossaryTab({ niche }: { niche: string }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["consolidated-glossary", niche],
-    queryFn: () => getConsolidatedGlossary(niche),
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  if (isLoading) return (
-    <div className="flex items-center justify-center h-48">
-      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-    </div>
-  );
-  if (isError || !data) return (
-    <div className="flex flex-col items-center justify-center h-48 gap-2">
-      <AlertCircle className="h-6 w-6 text-muted-foreground/40" />
-      <p className="text-sm text-muted-foreground text-center">
-        Ainda não consolidado. Use o botão acima para gerar.
-      </p>
-    </div>
-  );
-  return <GlossaryPanel markdown={data} />;
-}
-
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function NichoPage() {
   const params = useParams<{ nicho: string }>();
   const niche = decodeURIComponent(params.nicho);
-  const qc = useQueryClient();
 
-  const [insightsJobId, setInsightsJobId] = useState<string | undefined>();
-  const [glossaryJobId, setGlossaryJobId] = useState<string | undefined>();
   const [selectionOpen, setSelectionOpen] = useState(false);
 
   // Seleção da Fase 4. Set<slug>. Reset quando muda o nicho.
@@ -189,26 +91,6 @@ export default function NichoPage() {
       return new Set(eligible.map((iv) => iv.name));
     });
   }
-
-  const consolidateInsightsMutation = useMutation({
-    mutationFn: () => consolidateInsights(niche),
-    onSuccess: (data) => {
-      setInsightsJobId(data.job_id);
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: ["consolidated-insights", niche] });
-      }, 10_000);
-    },
-  });
-
-  const consolidateGlossaryMutation = useMutation({
-    mutationFn: () => consolidateGlossary(niche),
-    onSuccess: (data) => {
-      setGlossaryJobId(data.job_id);
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: ["consolidated-glossary", niche] });
-      }, 10_000);
-    },
-  });
 
   const total = interviews.length;
   const withRaw        = interviews.filter((iv) => iv.stages?.raw).length;
@@ -332,28 +214,6 @@ export default function NichoPage() {
               : `${withStructured} elegível${withStructured !== 1 ? "s" : ""}`}
           </Badge>
 
-          <details className="ml-auto group rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-xs">
-            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-muted-foreground hover:text-foreground">
-              <Archive className="h-3.5 w-3.5" />
-              Ações legadas
-            </summary>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <ConsolidateButton
-                label="Insights"
-                icon={Sparkles}
-                onClick={() => consolidateInsightsMutation.mutate()}
-                isPending={consolidateInsightsMutation.isPending}
-                jobId={insightsJobId}
-              />
-              <ConsolidateButton
-                label="Glossário"
-                icon={BookOpen}
-                onClick={() => consolidateGlossaryMutation.mutate()}
-                isPending={consolidateGlossaryMutation.isPending}
-                jobId={glossaryJobId}
-              />
-            </div>
-          </details>
         </div>
 
         <Tabs defaultValue="analysis" className="flex flex-col flex-1 overflow-hidden">
@@ -363,25 +223,7 @@ export default function NichoPage() {
                 <Brain className="h-3.5 w-3.5 mr-1.5" />
                 Análise
               </TabsTrigger>
-              <TabsTrigger value="insights" className="text-xs px-4">
-                <Archive className="h-3.5 w-3.5 mr-1.5" />
-                Insights legados
-              </TabsTrigger>
-              <TabsTrigger value="glossary" className="text-xs px-4">
-                <BookOpen className="h-3.5 w-3.5 mr-1.5" />
-                Glossário
-              </TabsTrigger>
             </TabsList>
-
-            <Link
-              href={`/nicho/${encodeURIComponent(niche)}/glossario`}
-              title="Abrir glossário consolidado em página completa"
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Glossário em página completa</span>
-              <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
 
           <div className="flex-1 overflow-hidden">
@@ -390,12 +232,6 @@ export default function NichoPage() {
                 niche={niche}
                 hasInterviewsSelected={selected.size > 0}
               />
-            </TabsContent>
-            <TabsContent value="insights" className="h-full m-0 data-[state=active]:flex flex-col">
-              <ConsolidatedInsightsTab niche={niche} />
-            </TabsContent>
-            <TabsContent value="glossary" className="h-full m-0 data-[state=active]:flex flex-col overflow-hidden">
-              <ConsolidatedGlossaryTab niche={niche} />
             </TabsContent>
           </div>
         </Tabs>

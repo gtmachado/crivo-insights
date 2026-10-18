@@ -26,7 +26,6 @@ const PROMPT_DESCRIPTIONS: Record<string, string> = {
   refine:               "Formata a transcrição bruta como diálogo e corrige erros do Whisper",
   structure:            "Transforma a transcrição refinada em entrevista estruturada com insights",
   glossary:             "Extrai termos e definições técnicas do nicho",
-  consolidate_glossary: "Consolida glossários individuais no glossário do nicho",
   niche_analysis:       "Gera análise de nicho a partir das entrevistas selecionadas",
 };
 

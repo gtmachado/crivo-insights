@@ -131,3 +131,37 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
     - Whisper compartilhado entre threads sem lock;
     - SDK deprecado do Gemini;
     - `_ffmpeg_available()` chamado a cada uso.
+
+---
+
+## E3 — Frontend: fundação e limpeza
+
+- **O quê:**
+  - **Legado removido:**
+    - aba e ações de consolidação em `nicho/[nicho]/page.tsx`;
+    - as páginas `/nicho/[nicho]/glossario` e `.../glossario/print`. O glossário consolidado do nicho deixa de existir, e o das entrevistas continua;
+    - as tarefas `consolidate*` em `ModelSettings` e `PromptSettings`;
+    - `getJobStatus`, `EditableDocType`, `AuthUser` e os cinco SVGs padrão de `public/`;
+    - a dependência `date-fns`;
+    - `store.ts` caiu de 48 para 25 linhas (`jobs` e `selected*` eram código morto); só `currentFile` fica, provisório até a E6 mover o documento ativo para `?doc=`.
+  - **`lib/api.ts` reescrito:**
+    - helpers `interviewPath` e `nichePath` com `encodeURIComponent` em um só lugar;
+    - `ApiError` e interceptor que extraem o `detail` do FastAPI (string ou lista de validação), distinguem 401 e backend inalcançável, e `errorMessage()`;
+    - o header `Authorization` só é enviado quando há secret;
+    - tipos unificados: `DocType = keyof InterviewStages`, `JobStatus` único, `Job.stages: Stage[]` sempre presente, e `JobStage` removido (usa `Stage` de `pipeline.ts`);
+    - upload monta os campos de meta por tabela e não mais um `if` por campo.
+  - **Novo:** `lib/query-keys.ts` (`qk`), com uma chave por recurso. Será usado pelas páginas na E6.
+  - **Bug:** a busca do glossário não ignorava acentos ("agil" não achava "ágil"). A regex `/̀-ͯ/g` não tinha colchetes e procurava 3 caracteres literais. Agora há um helper `stripAccents` com a faixa montada por `String.fromCharCode`, para não depender de caracteres invisíveis no fonte.
+  - **Pequenos:** `FILENAME_TO_DOC` e `stagesFromInterview` usam os tipos de `api.ts`; o upload não grava mais um job no store que ninguém lia.
+- **Por quê:** uma camada de dados tipada e sem duplicação antes de redesenhar as telas.
+- **Decisões que divergem do plano:**
+  - **`shadcn` continua em `dependencies`:** `globals.css` faz `@import "shadcn/tailwind.css"` no build, então não é só CLI. A ideia de movê-lo para `devDependencies` foi descartada.
+  - **Hooks e AmbientBackground:** os hooks (`useJobs`, `useSystemStatus`, `useAnalysisJob`) e a remoção de `AmbientBackground`, `VisualSettings` e `visual-preferences.ts` passam para E4–E6. Criá-los agora forçaria editar duas vezes as páginas que a E6 reescreve.
+- **Arquivos:** `frontend-next/src/lib/{api,query-keys,pipeline,files,glossary,store,supabase}.ts`, `src/app/(app)/nicho/[nicho]/page.tsx`, `src/app/(app)/upload/page.tsx`, `src/app/(app)/nicho/[nicho]/[entrevista]/page.tsx`, `src/components/settings/{Model,Prompt}Settings.tsx`, `package.json`, `package-lock.json`.
+- **Evidência dos gates:**
+  - `tsc --noEmit`: exit 0, depois de todas as edições;
+  - `npm run lint`: 17 problemas (15 erros, 2 warnings), **igual à baseline** (não aumentou);
+  - `npm run build`: OK, 10 rotas (eram 12), executado antes do último ajuste em `ModelSettings`/`PromptSettings`, que foi validado só com `tsc`; o build é refeito no fechamento da E4.
+- **Riscos e pendências:**
+  - **Busca com acento não verificada no browser:** a verificação funcional ("agil" encontra "ágil") fica para a E7.
+  - **Lint herdado:** os 15 erros herdados (`react-hooks/set-state-in-effect` e afins) continuam; as páginas e componentes que os contêm são reescritos na E5/E6, e o lint deve fechar em 0 erros ali.

@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { useQuery } from "@tanstack/react-query";
 import { getNiches, uploadInterview, type UploadMetadata } from "@/lib/api";
-import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +26,6 @@ function formatBytes(bytes: number) {
 
 export default function UploadPage() {
   const { data: niches = [] } = useQuery({ queryKey: ["niches"], queryFn: getNiches });
-  const setJob = useAppStore((s) => s.setJob);
 
   const [file, setFile] = useState<File | null>(null);
   const [niche, setNiche] = useState("");
@@ -75,14 +73,6 @@ export default function UploadPage() {
     try {
       const result = await uploadInterview(file, finalNiche, interviewName, setProgress, metadata);
       setJobId(result.job_id);
-      setJob(result.job_id, {
-        job_id: result.job_id,
-        niche: finalNiche,
-        interview: interviewName,
-        status: "running",
-        log: [],
-        paths: {},
-      });
       toast.success(`Pipeline iniciado! Job ID: ${result.job_id}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Erro no upload");

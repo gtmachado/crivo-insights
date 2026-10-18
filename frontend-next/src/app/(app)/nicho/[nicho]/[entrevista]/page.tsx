@@ -11,7 +11,6 @@ import {
   updateDocument,
   deleteInterview,
   type DocType,
-  type EditableDocType,
   type InterviewSubdir,
   type Job,
 } from "@/lib/api";
@@ -171,7 +170,7 @@ export default function EntrevistaPage() {
 
   const updateMutation = useMutation({
     mutationFn: (content: string) =>
-      updateDocument(niche, interview, docType as EditableDocType, content),
+      updateDocument(niche, interview, docType as DocType, content),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["doc", niche, interview, docType] });
       qc.invalidateQueries({ queryKey: ["interview-files", niche, interview] });

@@ -32,16 +32,6 @@ const TASK_META: Record<string, { label: string; description: string }> = {
     description:
       "Extrai termos e definições técnicas do nicho a partir da entrevista",
   },
-  consolidate: {
-    label: "Consolidação de insights",
-    description:
-      "Consolida insights extraídos de múltiplas entrevistas",
-  },
-  consolidate_glossary: {
-    label: "Consolidação de glossário",
-    description:
-      "Consolida glossários individuais no glossário do nicho",
-  },
 };
 
 const MODEL_LABELS: Record<string, string> = {
@@ -56,8 +46,6 @@ const CONFIGURABLE_TASKS = [
   "refine",
   "structure",
   "glossary",
-  "consolidate",
-  "consolidate_glossary",
 ] as const;
 
 export function ModelSettings() {

@@ -4,6 +4,8 @@
  * qual viewer mostrar (markdown / audio / video / outro).
  */
 
+import type { DocType } from "./api";
+
 export type FileKind = "markdown" | "audio" | "video" | "other";
 
 const MARKDOWN_EXT = new Set(["md", "markdown", "txt"]);
@@ -50,7 +52,7 @@ export function formatModified(epochSec: number): string {
  * Mapeamento de nome de arquivo de output → DocType lógico do backend.
  * Usado para decidir qual rota chamar para get/put.
  */
-export const FILENAME_TO_DOC: Record<string, "raw" | "refined" | "structured" | "glossary"> = {
+export const FILENAME_TO_DOC: Record<string, DocType> = {
   "01_transcricao_bruta.md":      "raw",
   "02_transcricao_refinada.md":   "refined",
   "03_entrevista_estruturada.md": "structured",
