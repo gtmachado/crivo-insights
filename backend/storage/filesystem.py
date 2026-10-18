@@ -1,9 +1,12 @@
 from pathlib import Path
 import json
+import os
 import re
 import shutil
+import tempfile
 
 from backend.core.config import settings
+from backend.core.layout import DOCS, META_FILENAME
 
 # Dirs reservados DENTRO do nicho — não são entrevistas, são consolidados.
 _NICHE_RESERVED = {"_insights", "_glossary"}
@@ -25,9 +28,41 @@ def _slugify(text: str) -> str:
     return text
 
 
+def write_text_atomic(path: Path, content: str) -> None:
+    """Grava via arquivo temporário + replace: leitores nunca veem um arquivo pela metade."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def upload_tmp_root() -> Path:
+    """Pasta de trabalho dos uploads em andamento (privada: nunca aparece como nicho)."""
+    return settings.data_dir / "_tmp"
+
+
+def niche_dir(niche: str) -> Path:
+    """Path da pasta do nicho (read-only: não cria nada)."""
+    return settings.data_dir / _slugify(niche)
+
+
+def _is_interview_dir(path: Path) -> bool:
+    """Subpasta de nicho que é uma entrevista (e não consolidado/privada)."""
+    return (
+        path.is_dir()
+        and path.name not in _NICHE_RESERVED
+        and not _is_private_dirname(path.name)
+    )
+
+
 def interview_dir(niche: str, interview_name: str) -> Path:
     """Cria e retorna a raiz da entrevista com todas as subpastas."""
-    base = settings.data_dir / _slugify(niche) / _slugify(interview_name)
+    base = niche_dir(niche) / _slugify(interview_name)
     for sub in ("raw", "processed", "parts", "outputs", "glossary"):
         (base / sub).mkdir(parents=True, exist_ok=True)
     return base
@@ -35,7 +70,7 @@ def interview_dir(niche: str, interview_name: str) -> Path:
 
 def interview_path(niche: str, interview_name: str) -> Path:
     """Retorna o path da entrevista SEM criar nada (read-only). Use p/ leitura/check."""
-    return settings.data_dir / _slugify(niche) / _slugify(interview_name)
+    return niche_dir(niche) / _slugify(interview_name)
 
 
 # Subpastas exibíveis pelo FileExplorer (ordem importa pra UI).
@@ -92,21 +127,9 @@ def delete_interview_dir(niche: str, interview_name: str) -> None:
     shutil.rmtree(base)
 
 
-def niche_insights_dir(niche: str) -> Path:
-    path = settings.data_dir / _slugify(niche) / "_insights"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
 def niche_analysis_path(niche: str) -> Path:
-    """Caminho do arquivo de análise manual do nicho (Fase 4)."""
-    return niche_insights_dir(niche) / f"analise_{_slugify(niche)}.md"
-
-
-def niche_glossary_dir(niche: str) -> Path:
-    path = settings.data_dir / _slugify(niche) / "_glossary"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    """Caminho do arquivo de análise manual do nicho (read-only: não cria pastas)."""
+    return niche_dir(niche) / "_insights" / f"analise_{_slugify(niche)}.md"
 
 
 def list_niches() -> list[str]:
@@ -125,73 +148,67 @@ def list_niches() -> list[str]:
 
 
 def list_interviews(niche: str) -> list[dict]:
-    niche_dir = settings.data_dir / _slugify(niche)
-    if not niche_dir.exists():
+    base = niche_dir(niche)
+    if not base.exists():
         return []
     result = []
-    for d in sorted(niche_dir.iterdir()):
-        if not d.is_dir() or d.name in _NICHE_RESERVED:
+    for d in sorted(base.iterdir()):
+        if not _is_interview_dir(d):
             continue
-        stages = {
-            "raw":        (d / "outputs" / "01_transcricao_bruta.md").exists(),
-            "refined":    (d / "outputs" / "02_transcricao_refinada.md").exists(),
-            "structured": (d / "outputs" / "03_entrevista_estruturada.md").exists(),
-            "glossary":   (d / "glossary" / "glossario_local.md").exists(),
-        }
-        result.append({"name": d.name, "stages": stages})
+        stages = {doc: (d / subdir / filename).exists() for doc, (subdir, filename) in DOCS.items()}
+        meta = _read_meta_file(d / META_FILENAME)
+        result.append({
+            "name": d.name,
+            "stages": stages,
+            "title": meta.get("title") or None,
+            "interviewee_name": meta.get("interviewee_name") or None,
+            "created_at": meta.get("created_at") or None,
+        })
     return result
 
 
 def save_markdown(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    write_text_atomic(path, content)
 
 
 def read_markdown(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def structured_docs_for_niche(niche: str) -> list[tuple[str, str]]:
-    """(nome_entrevista, conteúdo) de todos os 03_entrevista_estruturada.md do nicho."""
-    niche_dir = settings.data_dir / _slugify(niche)
-    result = []
-    for d in sorted(niche_dir.iterdir()):
-        if not d.is_dir() or d.name in _NICHE_RESERVED:
-            continue
-        path = d / "outputs" / "03_entrevista_estruturada.md"
-        if path.exists():
-            result.append((d.name, read_markdown(path)))
-    return result
-
-
 def structured_docs_for_selected(
     niche: str, interview_slugs: list[str]
 ) -> list[tuple[str, str]]:
     """
-    Variante de `structured_docs_for_niche` que filtra por uma lista de
-    entrevistas (slugs) selecionadas pelo usuário. Retorna na mesma ordem
-    fornecida; pula silenciosamente as que não tiverem 03_estruturada.md.
+    (slug, conteúdo) do 03_entrevista_estruturada.md das entrevistas (slugs)
+    selecionadas pelo usuário. Retorna na mesma ordem fornecida; pula
+    silenciosamente as que não tiverem o documento.
     """
-    base = settings.data_dir / _slugify(niche)
+    base = niche_dir(niche)
     if not base.exists():
         return []
     result: list[tuple[str, str]] = []
     seen: set[str] = set()
     for raw_name in interview_slugs:
         slug = _slugify(raw_name)
-        if slug in seen or slug in _NICHE_RESERVED:
+        if slug in seen:
             continue
         seen.add(slug)
         d = base / slug
-        path = d / "outputs" / "03_entrevista_estruturada.md"
-        if d.is_dir() and path.exists():
+        path = d.joinpath(*DOCS["structured"])
+        if _is_interview_dir(d) and path.exists():
             result.append((slug, read_markdown(path)))
     return result
 
 
 # ── Metadata da entrevista ────────────────────────────────────────────────────
 
-META_FILENAME = "metadata.json"
+def _read_meta_file(path: Path) -> dict:
+    """JSON do metadata; {} se ausente, corrompido ou que não seja um objeto."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def read_meta(niche: str, interview_name: str) -> dict:
@@ -200,13 +217,7 @@ def read_meta(niche: str, interview_name: str) -> dict:
     Retorna {} se o arquivo não existir — metadata é opcional para entrevistas
     antigas que não passaram pelo upload com GSD-002.
     """
-    path = interview_path(niche, interview_name) / META_FILENAME
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+    return _read_meta_file(interview_path(niche, interview_name) / META_FILENAME)
 
 
 def write_meta(niche: str, interview_name: str, data: dict) -> None:
@@ -216,47 +227,4 @@ def write_meta(niche: str, interview_name: str, data: dict) -> None:
     (use interview_dir para isso).
     """
     base = interview_path(niche, interview_name)
-    base.mkdir(parents=True, exist_ok=True)
-    path = base / META_FILENAME
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-# ── Configuração de modelos ───────────────────────────────────────────────────
-
-def _model_config_path() -> Path:
-    """data/config/models.json — runtime local, não versionado."""
-    return settings.data_dir.parent / "config" / "models.json"
-
-
-def read_model_config() -> dict[str, str]:
-    """
-    Lê modelos salvos via UI em data/config/models.json.
-    Retorna {} se o arquivo não existir — usa os defaults do código.
-    """
-    path = _model_config_path()
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-
-
-def write_model_config(data: dict[str, str]) -> None:
-    """Salva configuração de modelos em data/config/models.json."""
-    path = _model_config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def glossary_docs_for_niche(niche: str) -> list[tuple[str, str]]:
-    """(nome_entrevista, conteúdo) de todos os glossario_local.md do nicho."""
-    niche_dir = settings.data_dir / _slugify(niche)
-    result = []
-    for d in sorted(niche_dir.iterdir()):
-        if not d.is_dir() or d.name in _NICHE_RESERVED:
-            continue
-        path = d / "glossary" / "glossario_local.md"
-        if path.exists():
-            result.append((d.name, read_markdown(path)))
-    return result
+    write_text_atomic(base / META_FILENAME, json.dumps(data, ensure_ascii=False, indent=2))

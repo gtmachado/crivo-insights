@@ -2,6 +2,7 @@
 
 > Trabalhar 1 GSD por vez. Não avançar sem autorização.
 > Fase de Correções (GSD-001 a GSD-008) concluída! Fase 5 liberada.
+> Histórico: vários blocos abaixo citam arquivos que o refactor/facelift removeu ou renomeou (ver `docs/refactor/LOG.md`).
 
 ---
 
@@ -159,7 +160,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-003 — Atualizar Refine para Separar Participantes
 
-**Status:** ⬜ Pendente (depende de GSD-002 para injetar nomes reais)
+**Status:** ✅ Concluído (2026-05-02)
 
 **Objetivo:** A etapa de refine deve formatar a transcrição como diálogo identificado por falante.
 
@@ -221,7 +222,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-004 — Criar Configurações de Modelos via UI
 
-**Status:** ⬜ Pendente
+**Status:** ✅ Concluído (via PR #1)
 
 **Objetivo:** Tela de configurações com dropdown para selecionar o modelo LLM de cada etapa do pipeline.
 
@@ -260,7 +261,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-005 — Criar Configurações de Prompts Editáveis
 
-**Status:** ⬜ Pendente (depende de GSD-004 para ter a tela de configurações)
+**Status:** ✅ Concluído (via PR #2)
 
 **Objetivo:** Tela de configurações com textarea para editar o conteúdo de cada prompt.
 
@@ -299,7 +300,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## GSD-006 — Ajustar Glossário
 
-**Status:** ⬜ Pendente
+**Status:** ✅ Concluído (via PR #3)
 
 **Objetivo:**
 1. Glossário do nicho com mesmo nível de detalhe do glossário da entrevista (definição + exemplo + relacionados)
@@ -442,7 +443,7 @@ $resp.Headers["Content-Range"]  # ex: bytes 0-1023/74506240
 
 ## Extra — Logo / Favicon
 
-**Status:** ⬜ Pendente (baixa prioridade)
+**Status:** ✅ Concluído (refactor/facelift: logo de peneira em `components/common/Logo.tsx` e favicon em `app/icon.svg`)
 
 **Objetivo:** Adicionar ícone do Crivo Insights como favicon e ícone de aba do browser.
 

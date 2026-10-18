@@ -7,8 +7,8 @@
 ## 1. Identidade do Projeto
 
 **Crivo Insights** — plataforma interna de descoberta de mercado via entrevistas qualitativas.
-- **Backend:** FastAPI 0.115 + Python 3.11 em `backend/`
-- **Frontend:** Next.js 15 + React 19 + Tailwind CSS v4 + shadcn 4.5 em `frontend-next/`
+- **Backend:** FastAPI + Python 3.11 em `backend/`
+- **Frontend:** Next.js 16 + React 19 + Tailwind CSS v4 + shadcn 4.5 (base-ui) em `frontend-next/`
 - **Dados:** `data/niches/{nicho}/{entrevista}/` — hierarquia estrita em filesystem
 
 ---
@@ -17,26 +17,30 @@
 
 ### Código
 1. **Python correto:** sempre `C:\Users\geils\AppData\Local\Programs\Python\Python311\python.exe`
-2. **Sem `asChild` em Button:** shadcn 4.5 com `@base-ui/react/button` não tem essa prop. Use `<Link className="...">` puro.
+2. **Sem `asChild` em Button:** shadcn 4.5 com `@base-ui/react/button` não tem essa prop. Use `<Link className={buttonVariants(...)}>` puro.
 3. **Tailwind v4:** customizações via `@theme inline {}` em `globals.css`. Não existe `tailwind.config.js`.
-4. **Next.js 15:** antes de escrever qualquer código Next.js, confirme APIs em `node_modules/next/dist/docs/`.
-5. **Sem modificar `pipeline.py`:** use o padrão interceptor em `_run_job` de `interviews.py`.
-6. **Sonnet 4.6 obrigatório na análise de nicho:** usa `call_with_model()` em `niche_analyzer.py`. Nunca `_resolve_model()`.
-7. **Validar antes de entregar:** `py_compile` em todo `.py` tocado; `npm run build` no frontend.
+4. **Next.js 16:** antes de escrever qualquer código de framework, confirme APIs em `frontend-next/node_modules/next/dist/docs/`.
+5. **Sem modificar `backend/core/pipeline.py`:** use o padrão interceptor em `backend/services/interview_runner.py`. As mensagens de `on_step` do pipeline são um contrato (prefixos em `_STAGE_TRIGGERS`, coberto por teste).
+6. **Sonnet 4.6 obrigatório na análise de nicho:** `call_with_model()` em `niche_analyzer.py`, com os modelos de `core/layout.py`. Nunca `resolve_model()`.
+7. **Cores só por token** (`bg-card`, `text-muted-foreground`, `bg-success-soft`…). Nunca `emerald-*`, hex ou rgb fixos; sem `text-[Npx]` (use a escala + `text-2xs`).
+8. **Nomes de arquivo, tarefas LLM e modelos fixos vivem em `backend/core/layout.py`** — não repita literais.
+9. **Depois de `shadcn add`, confira imports e `package.json`:** a CLI 4.5.0 já reescreveu imports para um pacote npm `cn`; o correto é `@/lib/utils`.
+10. **Validar antes de entregar:** os gates da seção 6 (todos verdes).
 
-### Processo de trabalho
-8. **Trabalhar em blocos GSD:** execute somente o bloco pedido. Nunca avance para o próximo sem autorização explícita.
-9. **Nunca implementar bloco diferente do pedido:** se o usuário pede GSD-003, não tocar GSD-004 nem GSD-005.
-10. **Listar arquivos antes de alterar:** use Read/Glob/Grep para entender o escopo antes de qualquer Edit/Write.
-11. **Propor plano para features novas:** aguardar "pode começar" antes de escrever código.
-12. **Nenhuma worktree sem autorização explícita do usuário.**
-13. **Relatório curto ao fim de cada bloco:** listar arquivos alterados, causa, como testar, pendências.
+### Processo de trabalho — "Trilho auditável"
+11. **Uma branch por mudança, sem worktree** (worktree só com autorização explícita). Nunca trabalhar direto na `main`.
+12. **Etapas sequenciais, sem parada obrigatória entre elas.** Cada etapa só fecha com: gates verdes, commit(s) convencionais (`feat:`, `fix:`, `refactor:`, `docs:`) e uma entrada em `docs/refactor/LOG.md` (o quê / por quê / arquivos / evidência dos gates / riscos).
+13. **Gate falhou:** corrija e repita. Após 3 tentativas sem sucesso, pare e reporte.
+14. **Pare e pergunte somente se:** for preciso tocar `backend/core/pipeline.py`; a operação tocar dados reais em `data/niches/`; surgir decisão de produto fora do plano aprovado; um gate ficar travado.
+15. **Plano antes de feature nova** (aprovação do usuário), mas depois de aprovado o agente segue sem pedir "pode começar" a cada etapa.
+16. **Listar antes de alterar:** use Read/Glob/Grep para entender o escopo antes de qualquer Edit/Write.
+17. **Verificação visual sem gastar créditos:** navegue em dados existentes; não dispare upload, transcrição nem análise de nicho só para testar.
+18. **Relatório curto ao fim:** arquivos alterados, causa, como testar, pendências.
 
 ### Modelos LLM (custo)
-14. **Modelo padrão da sessão:** Claude Sonnet 4.6 Médio (ou o modelo ativo configurado). Nunca escalar sem necessidade.
-15. **Opus apenas com autorização explícita** do usuário ("pode usar Opus" ou "use claude-opus-*").
-16. **Evitar prompts gigantes:** não incluir arquivos inteiros no contexto se puder usar Read pontual.
-17. **Evitar reescrever arquivos completos** se um Edit cirúrgico resolve.
+19. **Modelo padrão da sessão:** Sonnet (ou o modelo ativo configurado). Nunca escalar sem necessidade.
+20. **Opus apenas com autorização explícita** do usuário.
+21. **Evitar prompts gigantes** e **reescritas de arquivo inteiro** quando um Edit cirúrgico resolve.
 
 ---
 
@@ -46,46 +50,38 @@
 Crivo Insights/
 ├── backend/
 │   ├── api/
-│   │   ├── main.py            # FastAPI app, verify_token (header + ?token=), /media, CORS
-│   │   └── routes/
-│   │       ├── interviews.py  # Pipeline interceptor, stages[], CRUD, FileExplorer
-│   │       └── niches.py      # Consolidação legada + análise de nicho (Fase 4)
+│   │   ├── main.py            # app, CORS, auth em todos os routers (exceto /health)
+│   │   ├── auth.py            # verify_token (Bearer ou ?token=), compare_digest
+│   │   ├── schemas.py         # modelos de entrada/saída (response_model)
+│   │   └── routes/            # interviews, niches, config, media, system
+│   ├── core/
+│   │   ├── config.py          # settings (.env)
+│   │   ├── layout.py          # nomes de arquivo, LLM_TASKS, modelos fixos — fonte única
+│   │   └── pipeline.py        # ⚠️ NÃO MODIFICAR — estável
 │   ├── services/
-│   │   ├── pipeline.py        # ⚠️ NÃO MODIFICAR — estável
-│   │   ├── llm_client.py      # call_llm(), call_with_model() para modelo fixo
-│   │   ├── niche_analyzer.py  # analyze_niche(), OpenRouter → Anthropic fallback
-│   │   └── consolidator.py
-│   ├── storage/
-│   │   └── filesystem.py      # Toda I/O de disco; slugify, paths, list_*
-│   └── prompts/
-│       └── niche_analysis.md  # Prompt PT-BR para Sonnet 4.6
+│   │   ├── interview_runner.py  # job do pipeline + derivação das etapas (interceptor)
+│   │   ├── jobs.py              # JobStore em memória, thread-safe
+│   │   ├── llm_client.py        # call(), call_with_model(), resolve_model()
+│   │   ├── prompt_store.py      # prompts editáveis, backup/restore
+│   │   ├── model_config.py      # overrides de modelo da UI (data/config/models.json)
+│   │   ├── niche_analyzer.py    # análise de nicho: OpenRouter → Anthropic, Sonnet 4.6 fixo
+│   │   └── converter / transcriber / refiner / structurer / glossary
+│   ├── storage/filesystem.py  # toda a I/O de disco; escrita atômica; slugify
+│   ├── prompts/               # refine, structure, glossary, niche_analysis (.md, PT-BR)
+│   └── tests/                 # pytest (91 testes), tudo em diretório temporário
 │
 └── frontend-next/src/
     ├── app/
-    │   ├── layout.tsx                              # ThemeProvider, suppressHydrationWarning
-    │   └── (app)/
-    │       ├── layout.tsx                          # Detecta /print/, renderiza sem sidebar
-    │       ├── settings/page.tsx                   # Configurações de API, URL
-    │       ├── nicho/[nicho]/page.tsx              # Seleção de entrevistas, tabs, análise
-    │       └── nicho/[nicho]/[entrevista]/page.tsx # Editor, FileExplorer, Player, Timeline
-    ├── components/
-    │   ├── editor/MarkdownEditor.tsx
-    │   ├── effects/AmbientBackground.tsx           # Blobs CSS animados
-    │   ├── files/FileExplorer.tsx
-    │   ├── glossary/{GlossaryCard,Detail,Grid,Panel,PrintLayout}.tsx
-    │   ├── interview/{InterviewHeader,DeleteInterviewDialog}.tsx
-    │   ├── layout/{Header,Sidebar}.tsx
-    │   ├── markdown/MarkdownPreview.tsx            # react-markdown + crivo-prose
-    │   ├── media/MediaPlayer.tsx
-    │   ├── niche/{AnalyzeNicheButton,NicheAnalysisTab}.tsx
-    │   ├── pipeline/{PipelineTimeline,PipelineStageDetails}.tsx
-    │   └── theme/{ThemeProvider,ThemeToggle}.tsx
-    └── lib/
-        ├── api.ts        # Axios, getApiUrl/Secret, todos os endpoints
-        ├── store.ts      # Zustand: currentFile, setCurrentFile
-        ├── files.ts      # detectKind, formatSize, FILENAME_TO_DOC
-        ├── pipeline.ts   # stagesFromInterview, slugify, aggregateStatus
-        └── glossary.ts   # parseGlossaryMarkdown, filterTerms
+    │   ├── globals.css        # tokens "Caderno de Campo", prose, impressão
+    │   ├── layout.tsx         # fontes locais (fontsource), Providers
+    │   ├── (auth)/login
+    │   └── (app)/             # layout com Sidebar; /print/ sem chrome
+    │       ├── dashboard, upload, settings (abas)
+    │       └── nicho/[nicho]  e  nicho/[nicho]/[entrevista]  (?doc= na URL)
+    ├── components/            # ui (shadcn), common, layout, interview, niche, dashboard,
+    │                          # pipeline, glossary, settings, editor, markdown, media, files, theme
+    ├── hooks/                 # useJobs, useNicheOverview, useAnalyzeNiche, useSystemStatus, useMounted
+    └── lib/                   # api.ts (ApiError), query-keys.ts, status.ts, pipeline.ts, files.ts, glossary.ts, format.ts
 ```
 
 ---
@@ -98,52 +94,50 @@ Crivo Insights/
   processed/                    ← WAV gerado pelo ffmpeg
   parts/                        ← chunks do Whisper
   outputs/
-    01_transcricao_bruta.md     ← doc type "raw"
-    02_transcricao_refinada.md  ← doc type "refined"
-    03_entrevista_estruturada.md ← doc type "structured"
+    01_transcricao_bruta.md     ← doc "raw"
+    02_transcricao_refinada.md  ← doc "refined"
+    03_entrevista_estruturada.md ← doc "structured"
   glossary/
-    glossario_local.md          ← doc type "glossary"
-  meta.json                     ← metadados (a criar: GSD-002)
+    glossario_local.md          ← doc "glossary"
+  metadata.json                 ← título, entrevistado, entrevistador, contato, observações
 ```
 
 ---
 
-## 5. Stack Visual (Tailwind v4 oklch)
+## 5. Stack Visual — "Caderno de Campo" (Tailwind v4, oklch)
 
-Tokens em `frontend-next/src/app/globals.css` dentro de `@theme inline {}` e `:root`/`.dark`.
+Claro por padrão; escuro (grafite quente) é opção em Configurações → Aparência. Sem gradientes, vidro ou brilho: o
+conteúdo (transcrições, análises) é o protagonista. Tokens em `frontend-next/src/app/globals.css` (`@theme inline {}`, `:root`, `.dark`).
 
-| Token/Classe | Uso |
+| Token / classe | Uso |
 |---|---|
-| `--primary` | Azul índigo |
-| `--accent` | Violeta |
-| `--gradient-from/via/to` | Gradiente azul→violeta |
-| `.gradient-text` | Texto com gradiente |
-| `.gradient-bg` | Fundo gradiente (botões primários) |
-| `.glass` | `backdrop-blur(14px)` + border sutil |
-| `.glass-strong` | Glass opaco (modais) |
-| `.glow-primary/soft` | Box-shadow brilho |
-| `.crivo-prose` | Container react-markdown |
-| `.no-print` | `display:none` em `@media print` |
+| `--background` / `--card` | Papel off-white quente / superfície |
+| `--foreground` / `--muted-foreground` | Tinta grafite / texto secundário |
+| `--primary` | Verde-petróleo — a cor do "insight"; usar com parcimônia |
+| `--highlight` | Marca-texto âmbar: seleção de texto, citações, destaques |
+| `--success`, `--warning`, `--info`, `--destructive` | Tons semânticos; cada um tem `-soft` (fundo) e `-foreground` (texto) |
+| `font-sans` / `font-heading` / `font-mono` | Inter / Source Serif 4 (títulos) / JetBrains Mono — locais via `@fontsource-variable` |
+| `text-2xs` | Texto mínimo (11 px) |
+| `.crivo-prose` | Leitura longa de markdown (72ch); `.crivo-prose--wide` remove a medida |
+| `.no-print`, `.print-columns` | Impressão |
+
+Componentes base em `components/common/`: `PageContainer`/`PageHeader`/`SectionLabel`, `EmptyState`/`ErrorState`/`LoadingState`,
+`StatusBadge`, `Logo`. Status → rótulo/tom só em `lib/status.ts`.
 
 ---
 
-## 6. Comandos de Validação
+## 6. Comandos de Validação (gates)
 
 ```powershell
-# Backend — validar sintaxe Python
-& "C:\Users\geils\AppData\Local\Programs\Python\Python311\python.exe" -m py_compile `
-  backend/api/main.py `
-  backend/api/routes/interviews.py `
-  backend/api/routes/niches.py `
-  backend/services/niche_analyzer.py `
-  backend/services/llm_client.py `
-  backend/storage/filesystem.py
+# Backend
+& "C:\Users\geils\AppData\Local\Programs\Python\Python311\python.exe" -m py_compile <arquivos .py tocados>
+& "C:\Users\geils\AppData\Local\Programs\Python\Python311\python.exe" -m pytest
 
-# Frontend — TypeScript + build
-cd frontend-next; npm run build
+# Frontend
+cd frontend-next; npm run lint; npx tsc --noEmit; npm run build
 ```
 
-**Build limpo = 0 erros Python + 0 erros TypeScript.**
+**Limpo = pytest verde + 0 problemas de lint + 0 erros TypeScript + build OK.**
 
 ---
 
@@ -158,49 +152,43 @@ Upload (audio/video)
   → glossary  (LLM → glossary/glossario_local.md)
 ```
 
-Stages detectados via interceptor em `_run_job()` — sem tocar `pipeline.py`.
+Etapas detectadas pelo interceptor em `interview_runner.py` — sem tocar `pipeline.py`. O job é criado **antes** da task
+agendar, então `GET /interviews/status/{id}` nunca dá 404 logo após o upload.
 
 ---
 
-## 8. Análise de Nicho (Fase 4)
+## 8. Análise de Nicho
 
-- Modelo: **Sonnet 4.6 fixo** via OpenRouter (`anthropic/claude-sonnet-4-6`), fallback Anthropic
+- Modelo: **Sonnet 4.6 fixo** via OpenRouter (`anthropic/claude-sonnet-4.6`), fallback Anthropic (`core/layout.py`)
 - Input: `03_entrevista_estruturada.md` das entrevistas selecionadas manualmente
 - Output: `data/niches/{nicho}/_insights/analise_{slug}.md`
-- Prompt: `backend/prompts/niche_analysis.md` — 6 seções, PT-BR, sem invenção
+- Prompt: `backend/prompts/niche_analysis.md`
+- A consolidação automática antiga (insights/glossário do nicho) e o frontend Streamlit foram **removidos**.
 
 ---
 
-## 9. Autenticação de Mídia
+## 9. Autenticação
 
-`<audio>`/`<video>` não enviam header `Authorization`.
-- Backend: `verify_token()` aceita `?token=X` como fallback
-- Frontend: `mediaUrl()` appenda `?token=...&ngrok-skip-browser-warning=true`
-- CORS: `expose_headers` inclui `Content-Range`, `Accept-Ranges` (necessário para seek/duração)
+- **Todas as rotas** exigem `API_SECRET_KEY` (header `Authorization: Bearer` ou `?token=`), exceto `GET /health`. Sem chave configurada = sem proteção (só dev local).
+- `<audio>`/`<video>` não enviam header: `mediaUrl()` no frontend appenda `?token=…&ngrok-skip-browser-warning=true`; `/media` valida o caminho contra path traversal e implementa Range (`bytes=a-b`, `a-`, `-n`).
+- CORS: `expose_headers` inclui `Content-Range`, `Accept-Ranges` (necessário para seek/duração).
+- O login do app usa Supabase (guard no cliente em `(app)/layout.tsx`).
 
 ---
 
 ## 10. Rotas de Impressão
 
-`(app)/layout.tsx` detecta `/\/print(?:$|\/)/.test(pathname)` → renderiza apenas `{children}` sem Sidebar/Header/AmbientBackground.
+`(app)/layout.tsx` detecta `/\/print(?:$|\/)/.test(pathname)` → renderiza apenas `{children}` sem Sidebar. A única rota
+de impressão hoje é `/nicho/[nicho]/[entrevista]/glossario/print` (dispara `window.print()` após 600 ms).
 
 ---
 
-## 11. Workflow GSD
+## 11. Histórico e Backlog
 
-O trabalho de melhoria do produto é organizado em blocos GSD no arquivo `docs/gsd/01_correcoes_prioritarias.md`.
-
-**Ordem atual:**
-1. GSD-001 — Player de mídia *(parcialmente concluído)*
-2. GSD-002 — Metadata de entrevista
-3. GSD-003 — Refine com separação de participantes
-4. GSD-004 — Config de modelos via UI
-5. GSD-005 — Config de prompts via UI
-6. GSD-006 — Glossário ajustado
-7. GSD-007 — Tema/fundo/light mode
-8. GSD-008 — Limpeza da análise de nicho
-
-**Fase 5 (features novas) está pausada** até GSD-001 a GSD-008 estarem concluídos.
+- GSD-001 a GSD-008 estão **concluídos** (ver `docs/gsd/`). A **Fase 5** está liberada: backlog em `docs/gsd/02_backlog.md`
+  (histórico de análises, exportar PDF, busca global Ctrl+K, analytics, multiusuário…).
+- A refatoração + facelift "Caderno de Campo" está registrada, etapa por etapa, em `docs/refactor/LOG.md`.
+- Planos novos seguem o Trilho auditável (seção 2), não o antigo fluxo "um GSD por vez com parada".
 
 ---
 
@@ -208,8 +196,8 @@ O trabalho de melhoria do produto é organizado em blocos GSD no arquivo `docs/g
 
 | Arquivo | Quando usar |
 |---------|-------------|
-| `.claude/skills/crivo-debug.md` | Bug, erro de build, player não toca, 500 no backend |
-| `.claude/skills/crivo-feature.md` | Feature nova (GSD-002, GSD-003, GSD-006, GSD-008) |
-| `.claude/skills/crivo-ui-polish.md` | Ajuste visual, tema, animação (GSD-007) |
-| `.claude/skills/crivo-prompt-config.md` | Editar prompt ou modelo LLM (GSD-004, GSD-005) |
+| `.claude/skills/crivo-debug.md` | Bug, erro de build, player não toca, 500/401 no backend |
+| `.claude/skills/crivo-feature.md` | Feature nova |
+| `.claude/skills/crivo-ui-polish.md` | Ajuste visual, tema, tokens, componentes de UI |
+| `.claude/skills/crivo-prompt-config.md` | Editar prompt ou modelo LLM |
 | `.claude/skills/crivo-cost-control.md` | Controle de custo, auditoria de tokens |

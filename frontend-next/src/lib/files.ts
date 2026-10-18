@@ -4,11 +4,16 @@
  * qual viewer mostrar (markdown / audio / video / outro).
  */
 
+import type { DocType } from "./api";
+
 export type FileKind = "markdown" | "audio" | "video" | "other";
 
 const MARKDOWN_EXT = new Set(["md", "markdown", "txt"]);
 const AUDIO_EXT    = new Set(["wav", "mp3", "m4a", "aac", "ogg", "oga", "flac", "opus"]);
 const VIDEO_EXT    = new Set(["mp4", "m4v", "mkv", "mov", "avi", "webm"]);
+
+/** Extensões aceitas no upload — espelha SUPPORTED_INPUT em backend/services/converter.py. */
+export const UPLOAD_EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".mkv", ".mov", ".avi", ".webm"] as const;
 
 export function fileExtension(name: string): string {
   const i = name.lastIndexOf(".");
@@ -50,7 +55,7 @@ export function formatModified(epochSec: number): string {
  * Mapeamento de nome de arquivo de output → DocType lógico do backend.
  * Usado para decidir qual rota chamar para get/put.
  */
-export const FILENAME_TO_DOC: Record<string, "raw" | "refined" | "structured" | "glossary"> = {
+export const FILENAME_TO_DOC: Record<string, DocType> = {
   "01_transcricao_bruta.md":      "raw",
   "02_transcricao_refinada.md":   "refined",
   "03_entrevista_estruturada.md": "structured",

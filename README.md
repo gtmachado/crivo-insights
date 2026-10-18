@@ -1,174 +1,118 @@
-# Interview Insights
+# Crivo Insights
 
-Sistema interno de discovery e extração de insights de entrevistas de negócio.
+Plataforma interna de descoberta de mercado a partir de entrevistas qualitativas. Você envia a gravação de uma entrevista; o Crivo transcreve, refina, estrutura e extrai um glossário. Depois, reúne várias entrevistas de um nicho em uma análise.
+
+- **Backend:** FastAPI + Python 3.11 (`backend/`)
+- **Frontend:** Next.js 16 + React 19 + Tailwind CSS v4 + shadcn (base-ui) (`frontend-next/`)
+- **Dados:** pastas em disco, `data/niches/{nicho}/{entrevista}/`
 
 ## Fluxo do pipeline
 
 ```
 Arquivo original (vídeo ou áudio)
-        │
-        ▼
-   raw/ ← cópia preservada do arquivo original
-        │
-        ▼
-  FFmpeg → processed/audio.wav (16kHz mono)
-        │
-        ▼
-  Split → parts/part_001.wav, part_002.wav... (se > AUDIO_CHUNK_MB)
-        │
-        ▼
-  Whisper local → transcrição bruta
-        │
-        ▼
-  outputs/01_transcricao_bruta.md
-        │
-        ▼
-  Claude (refine.txt) → corrige gramática sem alterar conteúdo
-        │
-        ▼
-  outputs/02_transcricao_refinada.md
-        │
-   ┌────┴────┐
-   ▼         ▼
-Claude      Claude
-(structure) (glossary)
-   │              │
-   ▼              ▼
-outputs/       glossary/
-03_entrevista  glossario_local.md
-_estruturada.md
+   → raw/                 cópia preservada
+   → processed/audio.wav  FFmpeg, 16 kHz mono
+   → parts/               trechos, se passar de AUDIO_CHUNK_MB
+   → Whisper local        outputs/01_transcricao_bruta.md
+   → LLM (refine)         outputs/02_transcricao_refinada.md   (separa entrevistador/entrevistado)
+   → LLM (structure)      outputs/03_entrevista_estruturada.md
+   → LLM (glossary)       glossary/glossario_local.md
 ```
 
-### Consolidação por nicho (após múltiplas entrevistas)
+Depois, na página do nicho, você escolhe entrevistas estruturadas e gera a **análise do nicho**
+(`data/niches/{nicho}/_insights/analise_{nicho}.md`) com Claude Sonnet 4.6 (modelo fixo).
+
+## Estrutura em disco
 
 ```
-Todos os 03_entrevista_estruturada.md do nicho
-        │
-        ▼
-  Claude (consolidate.txt)
-        │
-        ▼
-  _insights/01_insights_consolidados.md
-
-Todos os glossario_local.md do nicho
-        │
-        ▼
-  Claude (consolidate_glossary.txt)
-        │
-        ▼
-  _glossary/glossario_nicho.md
+data/niches/{nicho}/
+├── {entrevista}/
+│   ├── raw/ processed/ parts/
+│   ├── outputs/   01_transcricao_bruta.md, 02_transcricao_refinada.md, 03_entrevista_estruturada.md
+│   ├── glossary/  glossario_local.md
+│   └── metadata.json      título, entrevistado, entrevistador, contato, observações
+└── _insights/analise_{nicho}.md
+data/config/models.json    modelos escolhidos em Configurações (não versionado)
 ```
 
-## Estrutura de pastas gerada
+O documento `03_entrevista_estruturada.md` traz contexto, rotina, processos, ferramentas, falas importantes,
+dores (com classificação em 7 atributos), sinais de urgência e de disposição para pagar, e oportunidades.
 
-```
-data/niches/
-└── {nicho}/
-    ├── {entrevista-1}/
-    │   ├── raw/                         ← arquivo original preservado
-    │   │   └── entrevista.mp4
-    │   ├── processed/
-    │   │   └── audio.wav                ← WAV convertido (16kHz mono)
-    │   ├── parts/
-    │   │   ├── part_001.wav             ← partes (apenas se o áudio for grande)
-    │   │   └── part_002.wav
-    │   ├── outputs/
-    │   │   ├── 01_transcricao_bruta.md
-    │   │   ├── 02_transcricao_refinada.md
-    │   │   └── 03_entrevista_estruturada.md
-    │   └── glossary/
-    │       └── glossario_local.md
-    ├── {entrevista-2}/
-    │   └── ...
-    ├── _insights/
-    │   └── 01_insights_consolidados.md  ← gerado após consolidação
-    └── _glossary/
-        └── glossario_nicho.md           ← gerado após consolidação
-```
-
-## Documento 03_entrevista_estruturada.md
-
-Contém obrigatoriamente:
-
-1. **Contexto** — perfil do entrevistado
-2. **Rotina** — dia a dia e responsabilidades
-3. **Processos** — fluxos de trabalho descritos
-4. **Ferramentas** — sistemas e softwares mencionados
-5. **Falas Importantes** — citações diretas revelantes
-6. **Dores Identificadas** — lista numerada (D1, D2...)
-7. **Classificação das Dores** — tabela com 7 atributos por dor:
-   - Frequência, Intensidade, Impacto em tempo, Impacto em dinheiro, Urgência, Já tentou resolver, Sinal de disposição para pagar
-8. **Sinais de Urgência**
-9. **Sinais de Disposição para Pagar**
-10. **Oportunidades de Solução**
-
-## Configuração
+## Como rodar
 
 ```bash
-# 1. Criar ambiente e instalar dependências
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# 1. Backend — Python 3.11
+python -m venv venv && venv\Scripts\activate        # Linux/Mac: source venv/bin/activate
+pip install -r requirements.txt                      # testes: pip install -r requirements-dev.txt
+# FFmpeg precisa estar no PATH (https://ffmpeg.org/download.html)
 
-# 2. Instalar FFmpeg (necessário para conversão de áudio)
-# Windows: https://ffmpeg.org/download.html  (adicionar ao PATH)
-# Mac:     brew install ffmpeg
-# Linux:   sudo apt install ffmpeg
+cp .env.example .env     # preencha OPENROUTER_API_KEY (ou outro provedor) e API_SECRET_KEY
+run_backend.bat          # Linux/Mac: ./run_backend.sh  →  http://localhost:8000
 
-# 3. Configurar variáveis de ambiente
-cp .env.example .env
-# Editar .env e preencher ANTHROPIC_API_KEY
-
-# 4. Iniciar backend (Terminal 1)
-run_backend.bat      # Windows
-# ou: ./run_backend.sh
-
-# 5. Iniciar frontend (Terminal 2)
-run_frontend.bat     # Windows
-# ou: ./run_frontend.sh
-
-# Acessar em: http://localhost:8501
+# 2. Frontend
+cd frontend-next
+cp .env.example .env.local   # NEXT_PUBLIC_API_URL, NEXT_PUBLIC_API_SECRET, chaves do Supabase
+npm install
+npm run dev                  # http://localhost:3000
 ```
 
-## Variáveis de ambiente
+`dev.bat` sobe backend, ngrok e frontend em janelas separadas. A URL do backend e o token também podem ser
+trocados em **Configurações → Conexão**, sem redeploy.
+
+## Variáveis de ambiente (backend)
 
 | Variável | Padrão | Descrição |
-|----------|--------|-----------|
-| `ANTHROPIC_API_KEY` | — | Chave da API Anthropic (obrigatório) |
-| `WHISPER_MODEL` | `base` | Modelo Whisper: `tiny`, `base`, `small`, `medium`, `large` |
-| `AUDIO_CHUNK_MB` | `24` | Tamanho máximo de cada parte do áudio em MB |
-| `DATA_DIR` | `./data/niches` | Diretório raiz de saída |
+|---|---|---|
+| `API_SECRET_KEY` | — | Token exigido em todas as rotas (exceto `/health`), por `Authorization: Bearer` ou `?token=`. Vazio = sem proteção (só dev local). |
+| `LLM_PROVIDER` | `openrouter` | `openrouter`, `gemini` ou `anthropic` |
+| `OPENROUTER_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | — | Chave do provedor ativo. A análise de nicho usa OpenRouter ou Anthropic. |
+| `MODEL_REFINE` / `MODEL_STRUCTURE` / `MODEL_GLOSSARY` | — | Sobrescrevem o modelo de cada etapa (a UI tem prioridade sobre o `.env`) |
+| `WHISPER_MODEL` | `medium` | `tiny`, `base`, `small`, `medium`, `large` |
+| `AUDIO_CHUNK_MB` | `24` | Tamanho máximo de cada parte do áudio |
+| `DATA_DIR` | `./data/niches` | Raiz dos dados |
 
 ## Prompts
 
-Os prompts estão em `backend/prompts/` e podem ser editados sem alterar código:
+Ficam em `backend/prompts/*.md` e são editáveis em **Configurações → Prompts** (a UI guarda o padrão na primeira
+edição, faz backup a cada alteração e permite restaurar).
 
-| Arquivo | Função |
-|---------|--------|
-| `refine.txt` | Corrige transcrição bruta sem resumir |
-| `structure.txt` | Estrutura entrevista com 10 seções + classificação de dores |
-| `glossary.txt` | Extrai termos do nicho da transcrição refinada |
-| `consolidate.txt` | Consolida insights de N entrevistas do nicho |
-| `consolidate_glossary.txt` | Unifica glossários locais em glossário do nicho |
+| Arquivo | Etapa |
+|---|---|
+| `refine_prompt.md` | Refino da transcrição, com separação de participantes |
+| `structure_prompt.md` | Estruturação da entrevista e classificação de dores |
+| `glossary_prompt.md` | Glossário local |
+| `niche_analysis.md` | Análise do nicho |
 
-## Arquitetura
+## Arquitetura do backend
 
 ```
 backend/
-├── api/routes/       # FastAPI: endpoints de upload, status, documentos, consolidação
+├── api/
+│   ├── main.py            app, CORS, auth em todos os routers
+│   ├── auth.py            verify_token (Bearer ou ?token=)
+│   ├── schemas.py         modelos de entrada/saída da API
+│   └── routes/            interviews, niches, config, media, system
 ├── core/
-│   ├── config.py     # Settings via .env
-│   └── pipeline.py   # Orquestrador: chama serviços em sequência
+│   ├── config.py          settings (.env)
+│   ├── layout.py          nomes de arquivo, tarefas LLM e modelos fixos (fonte única)
+│   └── pipeline.py        orquestrador — NÃO modificar
 ├── services/
-│   ├── converter.py  # FFmpeg: WAV + split em partes
-│   ├── transcriber.py# Whisper local com cache do modelo
-│   ├── refiner.py    # Claude: refinamento gramatical em chunks
-│   ├── structurer.py # Claude: estruturação + insights
-│   ├── glossary.py   # Claude: glossário local
-│   └── consolidator.py # Claude: consolidação de insights e glossário
-├── prompts/          # Prompts editáveis em .txt
-└── storage/
-    └── filesystem.py # Cria pastas, lê e salva MDs
-frontend/
-└── app.py            # Interface Streamlit (3 abas)
+│   ├── interview_runner.py  roda o pipeline como job e deriva as etapas das mensagens
+│   ├── jobs.py              JobStore em memória, thread-safe
+│   ├── llm_client.py        provedores LLM; call() e call_with_model()
+│   ├── prompt_store.py      prompts editáveis com backup/restore
+│   ├── model_config.py      modelos escolhidos pela UI
+│   ├── niche_analyzer.py    análise do nicho (Sonnet 4.6 fixo)
+│   └── converter / transcriber / refiner / structurer / glossary
+├── storage/filesystem.py    toda a I/O de disco (escrita atômica)
+└── tests/                   pytest — 91 testes, isolados em diretório temporário
 ```
+
+## Testes e validação
+
+```bash
+python -m pytest                      # backend
+cd frontend-next && npm run lint && npx tsc --noEmit && npm run build
+```
+
+Veja `docs/refactor/LOG.md` para o histórico da refatoração e do facelift "Caderno de Campo".

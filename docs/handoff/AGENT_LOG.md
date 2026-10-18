@@ -16,6 +16,7 @@ Histórico de sessões por GSD/subfase. Atualizar ao encerrar cada sessão.
 | 2026-05-xx | Codex/GPT | GSD-007 — Tema e preferencias visuais | feat/gsd-007-tema-light-mode | `globals.css`, `AmbientBackground.tsx`, `ThemeToggle.tsx`, `settings/page.tsx` | Ajustes de cores do tema claro, blobs visíveis nos cantos e nova preferência visual. | ✅ Concluído — PR #5 mergeado |
 | 2026-05-xx | Codex/GPT | GSD-008 — Limpeza da análise de nicho | feat/gsd-008-analise-nicho | `nicho/[nicho]/page.tsx`, `NicheAnalysisTab.tsx` | UI simplificada com modal on-demand para seleção de entrevistas da análise de nicho. | ✅ Concluído — PR #6 mergeado |
 | 2026-05-16 | Antigravity | Docs — Sincronização | docs/sync-gsd-007-008 | `CURRENT_TASK.md`, `LAST_SESSION.md`, `AGENT_LOG.md`, `00_estado_atual.md`, `01_correcoes_prioritarias.md` | Sincroniza docs do projeto refletindo o estado atual (GSD-007 e GSD-008 concluídos). | ✅ Concluído — PR pendente |
+| 2026-10-17 | Claude Code (Opus 5.5 / Sonnet 5.5) | Refatoração + facelift "Caderno de Campo" (E0–E8) | refactor/facelift | `backend/{api,core,services,storage}`, `frontend-next/src/{app,components,hooks,lib}`, `docs/refactor/LOG.md` | Legado removido, auth em todas as rotas, bugs de dados corrigidos, estrutura reorganizada, 91 testes, novo visual claro por padrão, páginas redesenhadas, docs atualizados | ✅ Concluído — PR aberto |
 
 ---
 

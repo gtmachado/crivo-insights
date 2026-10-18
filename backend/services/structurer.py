@@ -1,17 +1,10 @@
 """Estrutura a transcrição refinada e extrai insights + classificação de dores."""
-from pathlib import Path
-
+from backend.services import prompt_store
 from backend.services.llm_client import call
-
-_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "structure_prompt.md"
-
-
-def _load_prompt() -> str:
-    return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
 def structure_interview(refined_text: str, interview_name: str, niche: str) -> str:
-    system_prompt = _load_prompt()
+    system_prompt = prompt_store.load("structure")
     user_content = (
         f"Nicho: {niche}\n"
         f"Entrevista: {interview_name}\n\n"

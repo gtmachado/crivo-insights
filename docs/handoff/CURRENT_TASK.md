@@ -1,7 +1,7 @@
 # CURRENT_TASK.md
 
-> Atualizado em: 2026-05-16
-> Agente executor da última sessão: Antigravity
+> Atualizado em: 2026-10-17
+> Agente executor da última sessão: Claude Code (Opus 5.5 no planejamento e na E0; Sonnet 5.5 da E1 em diante)
 
 ---
 
@@ -9,62 +9,33 @@
 
 | Campo | Valor |
 |---|---|
-| **GSD anterior** | GSD-008 — Limpeza da Análise de Nicho ✅ Concluído via PR #6 |
-| **Fase produto** | Fase de Correções (GSD-001 a GSD-008 concluídos) |
-| **Branch atual** | `docs/sync-gsd-007-008` (sincronização documental) |
-| **Agente executor** | Antigravity |
-| **Status** | Sincronizando handoff e atualizando estado do repositório |
+| **Tarefa anterior** | Refatoração + facelift "Caderno de Campo" ✅ Concluída (etapas E0–E8) |
+| **Fase produto** | Fase de Correções concluída (GSD-001 a GSD-008); Fase 5 liberada |
+| **Branch** | `refactor/facelift` (PR aberto para `main`) |
+| **Tag de rollback** | `pre-facelift` (`a247fca`) |
+| **Registro** | `docs/refactor/LOG.md` — o quê / por quê / arquivos / evidência dos gates / riscos, por etapa |
+| **Gates na entrega** | pytest 91 passed · lint 0 problemas · tsc 0 erros · build OK (9 páginas) |
 
 ---
 
 ## Próxima tarefa de produto
 
-Não há GSD ativo em andamento.
+Não há tarefa ativa. Candidatas (backlog em `docs/gsd/02_backlog.md`):
 
-### Próximos blocos possíveis:
+- **BL-001/002** — histórico de análises de nicho e exportar a análise em PDF
+- **BL-003** — busca global (Ctrl/Cmd+K)
+- **BL-007** — multiusuário (o `interviewer_user_id` já está reservado)
+- Trocar o SDK deprecado do Gemini (`google-generativeai`) e adicionar CI (GitHub Actions) com os gates acima
+- Fixar o formato de saída do prompt do glossário (hoje o parser tolera os 3 formatos que o LLM produz)
 
-- **Exportar PDF da transcrição refinada e entrevista estruturada** (novo GSD)
-- **Extra — Logo/Favicon**
-- **QA geral** pós-GSD-001 a GSD-008
-- **Melhorias de prompts de análise/oportunidade** (novo GSD, se necessário)
+## Pendências conhecidas da entrega
 
----
+- O **login real do Supabase não foi exercitado** na QA (usou-se sessão simulada em `localStorage`).
+- `/glossario/print` dispara `window.print()` e **não foi aberta** na QA.
+- O token continua indo na query de `/media` (limitação de `<audio>`/`<video>`).
+- Whisper compartilhado entre threads sem lock; `_ffmpeg_available()` roda a cada uso.
 
-## Checklist antes de continuar para o próximo GSD
+## Como trabalhar daqui para frente
 
-- [x] GSD-007 mergeado na main (PR #5)
-- [x] GSD-008 mergeado na main (PR #6, merge sha: 231b87c)
-- [x] Sincronização documental atual (atualizando docs de handoff)
-- [ ] Criar nova branch para o próximo GSD a partir da main atualizada
-- [ ] Apresentar plano antes de iniciar novo código
-
----
-
-## Próximo passo recomendado
-
-1. Criar branch própria a partir da main atualizada para o próximo GSD escolhido (ex: PDF export).
-2. Apresentar plano mínimo antes de codar.
-
----
-
-## Bloqueios
-
-Nenhum bloqueio técnico atual.
-
----
-
-## Arquivos envolvidos nesta sessão (docs)
-
-```
-AGENTS.md                                   ← novo
-docs/handoff/CURRENT_TASK.md               ← este arquivo
-docs/handoff/LAST_SESSION.md               ← novo
-docs/handoff/AGENT_LOG.md                  ← novo
-docs/sdd/00_visao_produto.md               ← novo
-docs/sdd/01_arquitetura.md                 ← novo
-docs/sdd/02_fluxos_principais.md           ← novo
-docs/sdd/03_regras_de_negocio.md           ← novo
-docs/decisions/ADR-001-arquitetura-base.md ← novo
-docs/gsd/00_estado_atual.md                ← atualizado
-.claude/skills/crivo-cost-control.md       ← atualizado
-```
+Trilho auditável (`CLAUDE.md`, seção 2): branch por mudança, etapas sequenciais, gates verdes, commit e entrada no log por
+etapa; parar só nos gatilhos listados (tocar `core/pipeline.py`, dados reais, decisão de produto, gate travado).

@@ -34,8 +34,6 @@ class Settings(BaseSettings):
     model_refine: str = ""
     model_structure: str = ""
     model_glossary: str = ""
-    model_consolidate: str = ""
-    model_consolidate_glossary: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
@@ -45,8 +43,6 @@ class Settings(BaseSettings):
             "refine": self.model_refine,
             "structure": self.model_structure,
             "glossary": self.model_glossary,
-            "consolidate": self.model_consolidate,
-            "consolidate_glossary": self.model_consolidate_glossary,
         }.get(task, "")
 
     def active_api_key(self) -> Optional[str]:

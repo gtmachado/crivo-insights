@@ -1,8 +1,33 @@
 # GSD-00 — Estado Atual do Crivo Insights
 
-> Última atualização: 2026-05-16
-> Build: limpo (12 rotas Next.js, 0 erros TypeScript, 0 erros Python)
-> Status: **Fases 0–4 concluídas. GSD-001–008 concluídos. Fase 5 aguardando início.**
+> Última atualização: 2026-10-17
+> Build: limpo (9 páginas Next.js 16, lint 0 problemas, 0 erros TypeScript, pytest 91 testes)
+> Status: **Fases 0–4 e GSD-001–008 concluídos. Refatoração + facelift "Caderno de Campo" concluídos (branch `refactor/facelift`). Fase 5 liberada.**
+
+---
+
+---
+
+## Refatoração + Facelift "Caderno de Campo" (2026-10)
+
+Registro completo, etapa por etapa, com a evidência dos gates: `docs/refactor/LOG.md`. Resumo do que mudou:
+
+- **Visual:** claro por padrão, papel/tinta + verde-petróleo + marca-texto âmbar; fontes locais (Inter, Source Serif 4,
+  JetBrains Mono); sem gradiente/vidro/blobs; escuro grafite como opção; logo de peneira e favicon.
+- **Navegação:** sidebar única (nichos com contagem, status da API, tema); sem header global; Sheet no mobile;
+  entrevista com abas de documento (`?doc=`) e painel lateral (gravação, pipeline, dados, arquivos); nicho com
+  abas Entrevistas/Análise; configurações em abas.
+- **Segurança:** token em **todas** as rotas (exceto `/health`), `compare_digest`, proteção contra path traversal em `/media`,
+  Range com sufixo, upload com nome sanitizado e extensão validada.
+- **Bugs corrigidos:** `PUT /meta` parcial zerava campos; 404 no primeiro poll de status; `GET /analysis` criava pastas;
+  busca do glossário ignorava acento; parser do glossário só lia um dos três formatos reais.
+- **Estrutura:** `core/layout.py`, `services/{interview_runner,jobs,prompt_store,model_config}.py`, `response_model` em todas as rotas,
+  escrita atômica, hooks e chaves de cache únicas no frontend, 91 testes pytest.
+- **Removido:** consolidação automática de insights/glossário do nicho, frontend Streamlit, modo "AI Glow/Simples",
+  Zustand, deps sem uso.
+
+> As seções de fases abaixo (0–3) descrevem o que foi entregue na época; `AmbientBackground`, glass/glow, `ThemeToggle`,
+> `InterviewHeader`, `GlossaryPanel` e as rotas `/glossario` de página inteira **não existem mais**.
 
 ---
 

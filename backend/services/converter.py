@@ -1,11 +1,13 @@
 """Converte vídeo/áudio para WAV e divide em chunks se necessário."""
-import shutil
-import struct
-import subprocess
+import logging
 import math
+import shutil
+import subprocess
 from pathlib import Path
 
 from backend.core.config import settings
+
+log = logging.getLogger("converter")
 
 SUPPORTED_INPUT = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".mp3", ".m4a", ".ogg", ".flac", ".wav"}
 
@@ -51,7 +53,7 @@ def convert_to_wav(input_path: Path, processed_dir: Path) -> Path:
     if not _ffmpeg_available():
         if suffix == ".wav":
             # WAV com formato diferente — copia mesmo assim e avisa
-            print("  AVISO: FFmpeg não encontrado. Copiando WAV sem re-encodar (pode afetar qualidade da transcrição).")
+            log.warning("FFmpeg não encontrado. Copiando WAV sem re-encodar (pode afetar qualidade da transcrição).")
             shutil.copy2(input_path, wav_path)
             return wav_path
         raise RuntimeError(
@@ -85,9 +87,10 @@ def split_wav(wav_path: Path, parts_dir: Path) -> list[Path]:
         return [wav_path]
 
     if not _ffmpeg_available():
-        print(
-            f"  AVISO: FFmpeg não disponível para dividir áudio ({file_size / 1024 / 1024:.1f} MB > {settings.audio_chunk_mb} MB). "
-            "Processando arquivo inteiro — a transcrição pode ser lenta ou falhar."
+        log.warning(
+            "FFmpeg não disponível para dividir áudio (%.1f MB > %d MB). "
+            "Processando arquivo inteiro — a transcrição pode ser lenta ou falhar.",
+            file_size / 1024 / 1024, settings.audio_chunk_mb,
         )
         return [wav_path]
 
