@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
-import { AmbientBackground } from "@/components/effects/AmbientBackground";
+import { MobileBar, Sidebar } from "@/components/layout/Sidebar";
+import { LogoMark } from "@/components/common/Logo";
+import { LoadingState } from "@/components/common/States";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,9 +14,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   /**
-   * Rotas /.../print/... renderizam SEM Sidebar/Header/AmbientBackground —
-   * é a versão "limpa" para imprimir ou exportar como PDF (Fase 3).
-   * Auth continua sendo aplicada — o user precisa estar logado pra acessar.
+   * Rotas /.../print/... renderizam SEM Sidebar — é a versão "limpa" para
+   * imprimir ou exportar como PDF. A auth continua sendo aplicada.
    */
   const isPrintRoute = !!pathname && /\/print(?:$|\/)/.test(pathname);
 
@@ -33,27 +33,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (checking) {
     return (
-      <div className="relative min-h-screen flex items-center justify-center">
-        {!isPrintRoute && <AmbientBackground />}
-        <div className="text-muted-foreground text-sm">Verificando sessão...</div>
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6">
+        <LogoMark className="size-10 animate-pulse" />
+        <LoadingState lines={2} className="w-48" />
       </div>
     );
   }
 
-  // Modo print: sem chrome, sem ambient bg, sem padding (a página assume
-  // layout próprio em fundo branco).
   if (isPrintRoute) {
-    return <div className="min-h-screen">{children}</div>;
+    return <div className="min-h-dvh">{children}</div>;
   }
 
   return (
-    <div className="relative flex h-screen overflow-hidden">
-      <AmbientBackground />
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+    <TooltipProvider>
+      <div className="flex h-dvh overflow-hidden bg-background">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <MobileBar />
+          <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

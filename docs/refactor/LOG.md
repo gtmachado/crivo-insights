@@ -205,3 +205,40 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
   - **Contraste AA não medido:** será checado na E7. Os tons `-foreground` foram escolhidos com diferença de luminosidade de pelo menos 0.5 sobre o `-soft`.
   - **Páginas ainda no visual antigo:** dashboard, upload, entrevista etc. continuam com a estrutura antiga sob a nova paleta; E5/E6 as redesenham.
   - **Tema de código por tokens:** a E7 confere visualmente em claro e escuro.
+
+---
+
+## E5 — Shell, navegação e login
+
+- **O quê:**
+  - **Header global removido; sidebar única** (`components/layout/Sidebar.tsx`), com:
+    - logo;
+    - botão primário **Nova entrevista**;
+    - **Início**;
+    - lista de **Nichos** com a contagem de entrevistas (consulta `qk.interviews`, a mesma chave das páginas);
+    - rodapé com Configurações, status da API (ponto + rótulo, link para /settings), seletor de tema e Sair.
+  - **Layout `(app)`:**
+    - `h-dvh` com `main` rolável. Acabaram o `-m-6` e o `calc(100vh-3.5rem)` acoplado ao antigo header; cada página passa a usar `PageContainer`/`PageHeader`;
+    - o guard de auth mostra a marca pulsando e skeleton, no lugar do texto "Verificando sessão…";
+    - o `TooltipProvider` fica na raiz do shell;
+    - as rotas `/print` continuam sem sidebar.
+  - **Mobile (< `lg`):** `MobileBar` com o menu abrindo a navegação em um `Sheet` (fecha ao navegar).
+  - **Tema:** `ThemeSwitch` (claro, escuro e sistema, com `role=radiogroup` e `aria-checked`) substitui o `ThemeToggle`. `useMounted` (via `useSyncExternalStore`) evita o mismatch de hidratação e o `setState` em efeito.
+  - **Login:** nova identidade com marca, redireciona quem já tem sessão, `autoComplete` nos campos e `main` semântico.
+  - **Hooks:** `hooks/useSystemStatus` (chave única `qk.systemStatus`).
+  - **Removidos:** `Header`, `AmbientBackground`, `ThemeToggle`, `VisualSettings`, `lib/visual-preferences.ts` (o modo "AI Glow/Simples" deixa de existir) e a regra de compatibilidade `.ambient-blob`.
+  - **Acessibilidade:** os botões de ícone da sidebar e da barra mobile têm `aria-label`; os links usam `aria-current`.
+- **Por quê:** uma navegação lateral única e previsível, sem header duplicando o logo, que funcione em mobile.
+- **Arquivos:** `src/app/(app)/layout.tsx`, `src/app/(auth)/login/page.tsx`, `src/components/layout/Sidebar.tsx`, `src/components/theme/ThemeSwitch.tsx`, `src/hooks/{useMounted,useSystemStatus}.ts`, `src/app/(app)/settings/page.tsx` (só remove o `VisualSettings`), `src/app/globals.css`.
+- **Evidência dos gates:**
+  - `tsc --noEmit`: exit 0;
+  - `npm run lint`: **16 problemas (14 erros, 2 warnings)**, abaixo da baseline de 17 (15 erros);
+  - `npm run build`: OK, 9 páginas geradas;
+  - verificação no browser (backend real em `localhost:8000` com os dados existentes):
+    - sidebar com os 3 nichos e contagens 1, 1 e 2;
+    - `/status`, `/niches/` e `/pipeline/jobs` respondem 200;
+    - layout sem header.
+- **Como a QA entra nas telas autenticadas:** a sessão do Supabase é simulada com um registro local falso em `localStorage` do navegador de teste (chave `sb-<ref>-auth-token`, expira em 10 h). Nenhuma credencial real é usada nem criada, e nenhum código de bypass entra no produto.
+- **Riscos e pendências:**
+  - **Páginas ainda no layout antigo:** as páginas existentes (dashboard, upload, nicho, entrevista, settings) ainda têm a estrutura anterior e ficam colando nas bordas (o `main` não tem mais padding) até a E6.
+  - **Backend de teste real:** o preview do backend serviu os dados reais de `data/niches` só para leitura; nenhum upload, transcrição ou análise foi disparado.
