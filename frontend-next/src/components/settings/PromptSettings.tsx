@@ -1,219 +1,138 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getPrompts,
-  getPrompt,
-  updatePrompt,
-  restorePrompt,
-  type PromptInfo,
-} from "@/lib/api";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Save, Loader2, RotateCcw, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
+import { ApiError, errorMessage, getPrompt, getPrompts, restorePrompt, updatePrompt } from "@/lib/api";
+import { qk } from "@/lib/query-keys";
+import { TONE } from "@/lib/status";
+import { cn } from "@/lib/utils";
+import { ErrorState, LoadingState } from "@/components/common/States";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
-const PROMPT_DESCRIPTIONS: Record<string, string> = {
-  refine:               "Formata a transcrição bruta como diálogo e corrige erros do Whisper",
-  structure:            "Transforma a transcrição refinada em entrevista estruturada com insights",
-  glossary:             "Extrai termos e definições técnicas do nicho",
-  niche_analysis:       "Gera análise de nicho a partir das entrevistas selecionadas",
+const DESCRIPTIONS: Record<string, string> = {
+  refine: "Formata a transcrição bruta como diálogo e corrige erros do Whisper.",
+  structure: "Transforma a transcrição refinada em entrevista estruturada, com insights.",
+  glossary: "Extrai termos e definições técnicas do nicho.",
+  niche_analysis: "Gera a análise de nicho a partir das entrevistas selecionadas.",
 };
 
 export function PromptSettings() {
   const qc = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
-  const [draft, setDraft]       = useState("");
-  const [dirty, setDirty]       = useState(false);
+  // Rascunhos por prompt (só o que foi editado): trocar de prompt não perde o que foi digitado.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  const { data: prompts = [], isLoading: loadingList } = useQuery({
-    queryKey: ["prompts-list"],
-    queryFn:  getPrompts,
+  const list = useQuery({ queryKey: qk.prompts, queryFn: getPrompts });
+  const prompts = list.data ?? [];
+  const name = selected ?? prompts[0]?.name ?? null;
+
+  const content = useQuery({
+    queryKey: qk.prompt(name ?? ""),
+    queryFn: () => getPrompt(name as string),
+    enabled: name !== null,
   });
 
-  // Seleciona o primeiro prompt automaticamente
-  useEffect(() => {
-    if (prompts.length > 0 && !selected) {
-      setSelected(prompts[0].name);
-    }
-  }, [prompts, selected]);
+  const draft = name !== null ? drafts[name] : undefined;
+  const text = draft ?? content.data?.content ?? "";
+  const dirty = draft !== undefined && draft !== content.data?.content;
 
-  const { data: promptData, isFetching: loadingContent } = useQuery({
-    queryKey: ["prompt", selected],
-    queryFn:  () => getPrompt(selected!),
-    enabled:  !!selected,
-  });
-
-  // Sincroniza textarea com dados carregados (não sobrescreve edição em andamento)
-  useEffect(() => {
-    if (promptData && !dirty) {
-      setDraft(promptData.content);
-    }
-  }, [promptData, dirty]);
-
-  function handleSelect(name: string) {
-    if (name === selected) return;
-    setSelected(name);
-    setDirty(false);
-    setDraft("");
+  function clearDraft(key: string) {
+    setDrafts((d) => Object.fromEntries(Object.entries(d).filter(([k]) => k !== key)));
   }
 
-  const saveMutation = useMutation({
-    mutationFn: () => updatePrompt(selected!, draft),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prompt", selected] });
-      qc.invalidateQueries({ queryKey: ["prompts-list"] });
-      setDirty(false);
-      toast.success("Prompt salvo com sucesso.");
+  function refresh(key: string) {
+    qc.invalidateQueries({ queryKey: qk.prompt(key) });
+    qc.invalidateQueries({ queryKey: qk.prompts });
+  }
+
+  const save = useMutation({
+    mutationFn: (key: string) => updatePrompt(key, drafts[key] ?? ""),
+    onSuccess: (_, key) => {
+      clearDraft(key);
+      refresh(key);
+      toast.success("Prompt salvo. Vale para o próximo processamento.");
     },
-    onError: () => toast.error("Erro ao salvar prompt."),
+    onError: (e) => toast.error(errorMessage(e)),
   });
 
-  const restoreMutation = useMutation({
-    mutationFn: () => restorePrompt(selected!),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prompt", selected] });
-      qc.invalidateQueries({ queryKey: ["prompts-list"] });
-      setDirty(false);
-      toast.success("Prompt restaurado ao estado padrão.");
+  const restore = useMutation({
+    mutationFn: (key: string) => restorePrompt(key),
+    onSuccess: (_, key) => {
+      clearDraft(key);
+      refresh(key);
+      toast.success("Prompt restaurado ao padrão.");
     },
-    onError: (err: unknown) => {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "";
-      if (detail.includes("já está no estado padrão")) {
-        toast.info("Este prompt nunca foi modificado — já está no estado padrão.");
-      } else {
-        toast.error("Erro ao restaurar prompt.");
-      }
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 409) toast.info("Este prompt nunca foi modificado: já está no padrão.");
+      else toast.error(errorMessage(e));
     },
   });
 
-  const currentPrompt = prompts.find((p: PromptInfo) => p.name === selected);
-  const isBusy = saveMutation.isPending || restoreMutation.isPending;
+  if (list.isLoading) return <LoadingState lines={6} />;
+  if (list.error) return <ErrorState title="Não foi possível carregar os prompts" error={list.error} onRetry={() => list.refetch()} />;
+
+  const busy = save.isPending || restore.isPending;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Prompts do Sistema</CardTitle>
-        <CardDescription>
-          Edite os prompts usados em cada etapa do pipeline. Alterações valem
-          imediatamente para os próximos processamentos.
-        </CardDescription>
-      </CardHeader>
+    <div className="space-y-4">
+      <p className={cn("flex items-start gap-2 rounded-lg px-3 py-2 text-sm", TONE.warning.soft)}>
+        <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+        Alterações valem para os próximos processamentos. Entrevistas já processadas não são reprocessadas automaticamente.
+      </p>
 
-      <CardContent className="space-y-4">
-        {/* Aviso de impacto */}
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            Alterações nos prompts impactam os próximos processamentos.
-            Entrevistas já processadas não são reprocessadas automaticamente.
-          </span>
-        </div>
+      <div role="tablist" aria-label="Prompts" className="flex flex-wrap gap-1.5">
+        {prompts.map((p) => (
+          <Button
+            key={p.name}
+            role="tab"
+            aria-selected={p.name === name}
+            variant={p.name === name ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setSelected(p.name)}
+          >
+            {p.label}
+            {(p.has_default || drafts[p.name] !== undefined) && (
+              <span className="ml-1 rounded-full bg-background px-1.5 text-2xs font-medium text-muted-foreground">
+                {drafts[p.name] !== undefined ? "não salvo" : "editado"}
+              </span>
+            )}
+          </Button>
+        ))}
+      </div>
 
-        {/* Seletor de prompt */}
-        <div className="flex flex-wrap gap-2">
-          {loadingList ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      {name && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">{DESCRIPTIONS[name]}</p>
+          {content.isLoading ? (
+            <LoadingState lines={8} />
+          ) : content.error ? (
+            <ErrorState error={content.error} onRetry={() => content.refetch()} />
           ) : (
-            prompts.map((p: PromptInfo) => (
-              <Button
-                key={p.name}
-                variant={selected === p.name ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleSelect(p.name)}
-                className={
-                  selected === p.name
-                    ? "gradient-bg text-white border-0 hover:opacity-90"
-                    : ""
-                }
-              >
-                {p.label}
-                {p.has_default && (
-                  <Badge
-                    variant="secondary"
-                    className="ml-1.5 py-0 px-1 text-[10px]"
-                  >
-                    editado
-                  </Badge>
-                )}
-              </Button>
-            ))
+            <Textarea
+              aria-label="Conteúdo do prompt"
+              value={text}
+              onChange={(e) => setDrafts((d) => ({ ...d, [name]: e.target.value }))}
+              rows={18}
+              className="resize-y font-mono text-xs"
+              placeholder="Conteúdo do prompt…"
+            />
           )}
-        </div>
-
-        {/* Editor */}
-        {selected && (
-          <div className="space-y-3">
-            {currentPrompt && (
-              <p className="text-xs text-muted-foreground">
-                {PROMPT_DESCRIPTIONS[selected] ?? ""}
-              </p>
-            )}
-
-            {loadingContent ? (
-              <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
-              </div>
-            ) : (
-              <Textarea
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  setDirty(true);
-                }}
-                rows={16}
-                className="font-mono text-xs resize-y"
-                placeholder="Conteúdo do prompt…"
-              />
-            )}
-
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                size="sm"
-                onClick={() => saveMutation.mutate()}
-                disabled={isBusy || !dirty || !draft.trim()}
-                className="gap-2 gradient-bg text-white border-0 hover:opacity-90"
-              >
-                {saveMutation.isPending ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</>
-                ) : (
-                  <><Save className="h-3.5 w-3.5" /> Salvar</>
-                )}
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => restoreMutation.mutate()}
-                disabled={isBusy}
-                className="gap-2"
-              >
-                {restoreMutation.isPending ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Restaurando…</>
-                ) : (
-                  <><RotateCcw className="h-3.5 w-3.5" /> Restaurar padrão</>
-                )}
-              </Button>
-
-              {dirty && (
-                <span className="text-xs text-muted-foreground">
-                  Alterações não salvas
-                </span>
-              )}
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button disabled={busy || !dirty || !text.trim()} onClick={() => save.mutate(name)}>
+              {save.isPending && <Loader2 className="animate-spin" aria-hidden />}
+              Salvar
+            </Button>
+            <Button variant="outline" disabled={busy} onClick={() => restore.mutate(name)}>
+              {restore.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <RotateCcw aria-hidden />}
+              Restaurar padrão
+            </Button>
+            {dirty && <span className="text-xs text-muted-foreground">Alterações não salvas</span>}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }

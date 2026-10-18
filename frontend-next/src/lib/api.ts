@@ -82,6 +82,26 @@ api.interceptors.response.use(
   },
 );
 
+/**
+ * Testa uma conexão ainda não salva (URL + secret digitados em Configurações),
+ * sem tocar no cliente axios (`api`), que continua apontando para a configuração salva.
+ */
+export async function testConnection(url: string, secret: string): Promise<SystemStatus> {
+  try {
+    const res = await axios.get<SystemStatus>(`${url.trim().replace(/\/+$/, "")}/status`, {
+      timeout: 8_000,
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+        ...(secret.trim() ? { Authorization: `Bearer ${secret.trim()}` } : {}),
+      },
+    });
+    return res.data;
+  } catch (err) {
+    const { message, status } = messageFromError(err);
+    throw new ApiError(message, status);
+  }
+}
+
 /** Mensagem pronta para toast, aceitando qualquer valor capturado em um catch. */
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Erro desconhecido.";

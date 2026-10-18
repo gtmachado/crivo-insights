@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getDocument } from "@/lib/api";
+import { qk } from "@/lib/query-keys";
 import { GlossaryPrintLayout } from "@/components/glossary/GlossaryPrintLayout";
 import { Loader2 } from "lucide-react";
 
@@ -19,7 +20,7 @@ export default function EntrevistaGlossarioPrintPage() {
   const interview = decodeURIComponent(params.entrevista);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["doc", niche, interview, "glossary"],
+    queryKey: qk.doc(niche, interview, "glossary"),
     queryFn: () => getDocument(niche, interview, "glossary"),
     staleTime: 5 * 60_000,
     retry: false,

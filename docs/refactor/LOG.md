@@ -242,3 +242,51 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
 - **Riscos e pendências:**
   - **Páginas ainda no layout antigo:** as páginas existentes (dashboard, upload, nicho, entrevista, settings) ainda têm a estrutura anterior e ficam colando nas bordas (o `main` não tem mais padding) até a E6.
   - **Backend de teste real:** o preview do backend serviu os dados reais de `data/niches` só para leitura; nenhum upload, transcrição ou análise foi disparado.
+
+---
+
+## E6 — Páginas redesenhadas
+
+- **O quê:** todas as telas passam a usar `PageContainer`/`PageHeader`, os tokens novos e os componentes do E4. Os blocos foram comitados em duas partes.
+  - **Início (`/dashboard`):**
+    - resumo (nichos, entrevistas, em processamento);
+    - jobs em andamento e atividade recente;
+    - cartões de nichos;
+    - informações do sistema em lista de definições.
+  - **Nicho:**
+    - abas **Entrevistas** e **Análise**;
+    - tabela com checkbox. Só entrevistas com documento estruturado são selecionáveis, e a seleção usa um checkbox com estado indeterminado no cabeçalho;
+    - barra de ação fixa "N de M selecionadas · Gerar análise";
+    - banner de andamento e de falha da análise, visível nas duas abas;
+    - "ainda não gerada" (404) e falha real passam a ser estados distintos.
+  - **Entrevista:**
+    - abas de documento **Estruturada**, **Refinada**, **Bruta** e **Glossário**, com o documento ativo na URL (`?doc=`), substituindo o store Zustand;
+    - coluna lateral com **Gravação** (player compacto com seletor entre original e WAV), **Pipeline** (timeline vertical), **Dados da entrevista** (leitura e edição) e **Arquivos**;
+    - editar e excluir ficam no cabeçalho;
+    - quando o job termina, os documentos e a lista de arquivos são revalidados.
+  - **Nova entrevista:**
+    - fluxo em uma página: arquivo, nicho, nome e bloco recolhível de participantes e observações;
+    - nicho pré-selecionado por `?niche=`;
+    - nome da entrevista sugerido a partir do arquivo;
+    - ao enviar, redireciona para a entrevista, onde o pipeline é acompanhado.
+  - **Configurações:** abas **Conexão**, **Modelos**, **Prompts** e **Aparência**. A conexão agora tem "Testar conexão" com os valores digitados, sem salvar. Os formulários guardam só as edições do usuário (sem `useEffect` de sincronização) e os rascunhos de prompt são por prompt.
+  - **Glossário:**
+    - `GlossaryGrid` virou só conteúdo (busca sem acento, filtro A–Z, cartões e detalhe em coluna fixa no `xl`, painel deslizante abaixo disso, via `useMediaQuery`);
+    - o glossário da entrevista agora vive na aba **Glossário** (com "Exportar PDF"); a página própria `/glossario` e o `GlossaryPanel` foram removidos; `/glossario/print` continua.
+  - **Novos hooks:** `useJobs` (polling adaptativo de 3 s e 30 s, antes duplicado), `useNicheOverview`, `useAnalyzeNiche` (o `setTimeout` recursivo manual saiu do botão) e `useMediaQuery`.
+  - **Limpeza:**
+    - removidos o `dialog-legacy` e os aliases de compatibilidade do CSS;
+    - `store.ts` e a dependência `zustand`;
+    - `AnalyzeNicheButton`, `InterviewHeader` e `GlossaryPanel`.
+  - **Leitura:** `MarkdownPreview` mostra o frontmatter do pipeline como linha de metadados; `MarkdownEditor` usa `AlertDialog` no lugar de `window.confirm` e Esc cancela.
+  - **Backend:** `GET /interviews/{niche}` passa a incluir `title`, `interviewee_name` e `created_at` do `metadata.json`, para a tabela do nicho (2 testes novos).
+- **Por quê:** completar o facelift e levar a organização das telas ao desenho aprovado.
+- **Evidência dos gates:**
+  - `tsc --noEmit`: exit 0;
+  - `npm run lint`: **0 erros, 0 warnings**. Era 17 problemas na baseline, e a meta de zerar na E6 foi cumprida;
+  - `npm run build`: OK, 9 páginas geradas;
+  - backend: `py_compile` OK e `pytest` **91 passed**;
+  - verificação no browser com os dados reais: nicho (tabela e contagens), entrevista (leitura, player com duração 17:11, pipeline, arquivos).
+- **Riscos e pendências:**
+  - **Sem acesso ao login real:** as telas foram verificadas com sessão simulada; o fluxo de login com Supabase real não foi exercitado.
+  - **Telas de dados reais sem QA completa:** Upload, Configurações e Glossário serão percorridos na E7.

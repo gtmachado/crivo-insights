@@ -1,13 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText } from "lucide-react";
+import { FileText, Printer } from "lucide-react";
 import { ApiError, getDocument, updateDocument, type DocType } from "@/lib/api";
 import { qk } from "@/lib/query-keys";
 import { MarkdownEditor } from "@/components/editor/MarkdownEditor";
 import { EmptyState, ErrorState, LoadingState } from "@/components/common/States";
-import { GlossaryPanel } from "@/components/glossary/GlossaryPanel";
+import { GlossaryGrid } from "@/components/glossary/GlossaryGrid";
 import { MarkdownPreview } from "@/components/markdown/MarkdownPreview";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * Painel de leitura (ou edição) de um documento da entrevista.
@@ -78,12 +79,15 @@ export function DocumentPane({
   }
 
   if (doc === "glossary") {
+    const printHref = `/nicho/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/glossario/print`;
     return (
-      <div className="h-[70vh] overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
-        <GlossaryPanel
-          markdown={content}
-          glossarioFullHref={`/nicho/${encodeURIComponent(niche)}/${encodeURIComponent(interview)}/glossario`}
-        />
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <a href={printHref} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Printer aria-hidden /> Exportar PDF
+          </a>
+        </div>
+        <GlossaryGrid markdown={content} />
       </div>
     );
   }

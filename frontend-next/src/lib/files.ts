@@ -12,6 +12,9 @@ const MARKDOWN_EXT = new Set(["md", "markdown", "txt"]);
 const AUDIO_EXT    = new Set(["wav", "mp3", "m4a", "aac", "ogg", "oga", "flac", "opus"]);
 const VIDEO_EXT    = new Set(["mp4", "m4v", "mkv", "mov", "avi", "webm"]);
 
+/** Extensões aceitas no upload — espelha SUPPORTED_INPUT em backend/services/converter.py. */
+export const UPLOAD_EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".mkv", ".mov", ".avi", ".webm"] as const;
+
 export function fileExtension(name: string): string {
   const i = name.lastIndexOf(".");
   return i >= 0 ? name.slice(i + 1).toLowerCase() : "";

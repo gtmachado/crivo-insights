@@ -1,38 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getModelConfig, updateModelConfig, type ModelConfigUpdate } from "@/lib/api";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Save, Loader2, Lock } from "lucide-react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Loader2, Lock } from "lucide-react";
+import { errorMessage, getModelConfig, updateModelConfig, type ModelConfigUpdate } from "@/lib/api";
+import { qk } from "@/lib/query-keys";
+import { ErrorState, LoadingState } from "@/components/common/States";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const TASK_META: Record<string, { label: string; description: string }> = {
-  refine: {
-    label: "Refinamento",
-    description:
-      "Formata a transcrição bruta como diálogo e corrige erros do Whisper",
-  },
-  structure: {
-    label: "Estruturação",
-    description:
-      "Transforma a transcrição refinada em entrevista estruturada com insights",
-  },
-  glossary: {
-    label: "Glossário",
-    description:
-      "Extrai termos e definições técnicas do nicho a partir da entrevista",
-  },
-};
+const TASKS = [
+  { id: "refine", label: "Refinamento", description: "Formata a transcrição bruta como diálogo e corrige erros do Whisper." },
+  { id: "structure", label: "Estruturação", description: "Transforma a transcrição refinada em entrevista estruturada, com insights." },
+  { id: "glossary", label: "Glossário", description: "Extrai termos e definições técnicas do nicho a partir da entrevista." },
+] as const;
 
 const MODEL_LABELS: Record<string, string> = {
   "anthropic/claude-sonnet-4.6": "Claude Sonnet 4.6 (recomendado)",
@@ -41,151 +24,99 @@ const MODEL_LABELS: Record<string, string> = {
   "google/gemini-2.5-flash": "Gemini 2.5 Flash",
   "google/gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
 };
+const labelOf = (model: string) => MODEL_LABELS[model] ?? model;
 
-const CONFIGURABLE_TASKS = [
-  "refine",
-  "structure",
-  "glossary",
-] as const;
+/** Valor sentinela do Select para "usar o padrão" (string vazia não funciona como valor). */
+const DEFAULT = "default";
 
 export function ModelSettings() {
-  const queryClient = useQueryClient();
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["model-config"],
+  const qc = useQueryClient();
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: qk.modelConfig,
     queryFn: getModelConfig,
     retry: false,
     staleTime: 30_000,
   });
 
-  const [form, setForm] = useState<Record<string, string>>({});
+  // Só as alterações feitas pelo usuário; o resto vem do servidor. (Sem efeito de sincronização.)
+  const [edits, setEdits] = useState<Record<string, string>>({});
 
-  // Preenche o form com os overrides salvos quando os dados carregam
-  useEffect(() => {
-    if (data?.saved) {
-      setForm(data.saved);
-    }
-  }, [data]);
-
-  const mutation = useMutation({
+  const save = useMutation({
     mutationFn: (update: ModelConfigUpdate) => updateModelConfig(update),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["model-config"] });
-      queryClient.invalidateQueries({ queryKey: ["system-status"] });
-      toast.success("Modelos salvos. Aplica a novas entrevistas.");
+      setEdits({});
+      qc.invalidateQueries({ queryKey: qk.modelConfig });
+      qc.invalidateQueries({ queryKey: qk.systemStatus });
+      toast.success("Modelos salvos. Valem para as próximas entrevistas.");
     },
-    onError: () => {
-      toast.error("Erro ao salvar modelos. Verifique o backend.");
-    },
+    onError: (e) => toast.error(errorMessage(e)),
   });
 
-  function handleSave() {
-    mutation.mutate(form as ModelConfigUpdate);
+  if (isLoading) return <LoadingState lines={5} />;
+  if (error || !data) {
+    return <ErrorState title="Não foi possível carregar os modelos" error={error} onRetry={() => refetch()} />;
   }
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Carregando configurações de modelos…
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (isError || !data) {
-    return (
-      <Card>
-        <CardContent className="py-4 text-sm text-muted-foreground">
-          Não foi possível carregar configurações de modelos. Backend offline?
-        </CardContent>
-      </Card>
-    );
-  }
+  const current = (task: string) => edits[task] ?? data.saved[task] ?? "";
+  const dirty = TASKS.some(({ id }) => current(id) !== (data.saved[id] ?? ""));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Modelos de IA</CardTitle>
-        <CardDescription>
-          Selecione o modelo LLM para cada etapa do pipeline. Aplica apenas a
-          novas entrevistas processadas.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        {CONFIGURABLE_TASKS.map((task) => {
-          const meta = TASK_META[task];
-          const effective = data.effective[task] ?? "";
-          const saved = form[task] ?? "";
+    <form
+      className="space-y-6"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate(Object.fromEntries(TASKS.map(({ id }) => [id, current(id)])));
+      }}
+    >
+      <p className="text-sm text-muted-foreground">
+        Escolha o modelo de cada etapa do pipeline. A mudança vale apenas para entrevistas processadas daqui para a frente.
+      </p>
 
-          return (
-            <div key={task} className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">{meta.label}</Label>
-                {!saved && (
-                  <span className="text-xs text-muted-foreground">
-                    padrão: {MODEL_LABELS[effective] ?? effective}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">{meta.description}</p>
-              <select
-                value={saved}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, [task]: e.target.value }))
-                }
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring"
-              >
-                <option value="">
-                  — usar padrão ({MODEL_LABELS[effective] ?? effective}) —
-                </option>
-                {data.allowed_models.map((m) => (
-                  <option key={m} value={m}>
-                    {MODEL_LABELS[m] ?? m}
-                  </option>
+      {TASKS.map(({ id, label, description }) => {
+        const effective = data.effective[id] ?? "";
+        const value = current(id);
+        const items = [
+          { value: DEFAULT, label: `Padrão — ${labelOf(effective)}` },
+          ...data.allowed_models.map((m) => ({ value: m, label: labelOf(m) })),
+        ];
+        return (
+          <div key={id} className="space-y-1.5">
+            <Label htmlFor={`model-${id}`}>{label}</Label>
+            <p className="text-xs text-muted-foreground">{description}</p>
+            <Select
+              value={value || DEFAULT}
+              items={items}
+              onValueChange={(next) => setEdits((e) => ({ ...e, [id]: next === DEFAULT ? "" : String(next) }))}
+            >
+              <SelectTrigger id={`model-${id}`} className="w-full max-w-md">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {items.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
                 ))}
-              </select>
-            </div>
-          );
-        })}
-
-        {/* niche_analysis — fixo, não editável */}
-        <div className="rounded-md border border-dashed border-border p-3 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-            <Label className="text-sm font-medium text-muted-foreground">
-              Análise de nicho
-            </Label>
-            <Badge variant="secondary" className="text-xs">
-              fixo
-            </Badge>
+              </SelectContent>
+            </Select>
           </div>
+        );
+      })}
+
+      <div className="flex items-start gap-3 rounded-lg border border-dashed border-border p-3">
+        <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="space-y-0.5 text-sm">
+          <p className="font-medium">Análise de nicho <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">fixo</span></p>
           <p className="text-xs text-muted-foreground">
-            Análise estratégica multi-entrevista. Sempre usa{" "}
-            <span className="font-mono text-xs">anthropic/claude-sonnet-4.6</span>{" "}
-            — não configurável.
+            Sempre usa <span className="font-mono">{data.fixed.niche_analysis ?? "anthropic/claude-sonnet-4.6"}</span>; não é configurável.
           </p>
         </div>
+      </div>
 
-        <div className="flex items-center gap-3 pt-1">
-          <Button
-            onClick={handleSave}
-            disabled={mutation.isPending}
-            className="gradient-bg text-white border-0 hover:opacity-90 glow-soft gap-2"
-          >
-            {mutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Salvar modelos
-          </Button>
-          {mutation.isSuccess && (
-            <span className="text-xs text-emerald-500">Salvo!</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      <Button type="submit" disabled={!dirty || save.isPending}>
+        {save.isPending && <Loader2 className="animate-spin" aria-hidden />}
+        Salvar modelos
+      </Button>
+    </form>
   );
 }

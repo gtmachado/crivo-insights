@@ -429,15 +429,3 @@
 .print-root {
   color-scheme: light;
 }
-
-/* ───────────────────────── COMPATIBILIDADE (remover na E6) ──────────────── */
-/* Classes do visual "AI Glow" ainda usadas por telas que a E5/E6 reescrevem.
-   Aqui viram equivalentes neutros do novo sistema, para a transição não quebrar. */
-
-@layer utilities {
-  .gradient-text { color: var(--foreground); }
-  .gradient-bg { background-color: var(--primary); }
-  .glass, .glass-strong { background-color: var(--card); border: 1px solid var(--border); }
-  .glow-primary, .glow-soft { box-shadow: none; }
-}
-
