@@ -290,3 +290,46 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
 - **Riscos e pendências:**
   - **Sem acesso ao login real:** as telas foram verificadas com sessão simulada; o fluxo de login com Supabase real não foi exercitado.
   - **Telas de dados reais sem QA completa:** Upload, Configurações e Glossário serão percorridos na E7.
+
+---
+
+## E7 — QA visual e gates
+
+- **O quê:** a QA percorreu as rotas contra o backend real (dados reais, só leitura) em tema claro, escuro e mobile (375 px). Ela achou e corrigiu três problemas.
+  - **Glossário vazio (bug antigo):** o parser só entendia o formato `## Termo` + `**Definição:**` em linhas soltas. Os glossários reais usam três formatos diferentes, porque o prompt não fixa o formato:
+    - `### **Termo**` com itens `*   **Definição:** …`;
+    - `## 1. Termo` com o valor na linha seguinte;
+    - `### Termo` com campos em linha.
+  - **Resultado antes do conserto:** a aba mostrava "Este glossário ainda está vazio" nos três.
+  - **Conserto (`lib/glossary.ts`):** o parser agora aceita títulos H2–H4, numeração, negrito, marcadores de lista e de citação, valores multilinha, rótulos "Exemplo de Uso" e "Exemplo na entrevista", e rótulos em inglês.
+  - **Verificado nos dados reais:** 9, 25 e 13 termos nos três formatos.
+  - **Prompt do glossário:** não foi alterado. Fixar o formato no prompt seria uma decisão de produto; o parser tolerante resolve sem mudar o comportamento do pipeline.
+  - **Layout do glossário:** o detalhe em coluna fixa por breakpoint de viewport esmagava os cartões dentro da coluna da entrevista (cartão com cerca de 65 px). Agora o detalhe abre sempre no painel deslizante, e os cartões usam container queries (`@lg`, `@3xl`).
+  - **Semântica do seletor de prompts:** estava como `role=tab` sem navegação de abas; virou grupo de botões com `aria-pressed`.
+- **Verificações funcionais (resultado observado):**
+  - **Busca sem acento:** "intervencao terapeutica" encontra "Intervenção Terapêutica" (filtro "1 de 9 termos").
+  - **Telas percorridas:**
+    - início, nicho (tabela, contagens e seleção);
+    - entrevista, com player de áudio de 17:11 (Range funcionando), pipeline e arquivos;
+    - upload, com nicho pré-selecionado por `?niche=` e envio desabilitado até haver arquivo;
+    - as quatro abas de Configurações, com a de Modelos mostrando os overrides salvos.
+  - **Sem disparos de custo:** nenhum upload, transcrição ou análise foi disparado.
+  - **Mobile (375 px):** sem rolagem horizontal; a barra superior abre a navegação em Sheet.
+  - **Tema escuro:** grafite quente legível.
+- **Segurança (backend real, `API_SECRET_KEY` configurada):** `/health` 200; `/niches/`, `/status`, `/pipeline/jobs`, `/config/models`, `/media/…` e uma tentativa de traversal em `/media` devolvem **401** sem token; token errado também 401. Antes, só o `/media` exigia token.
+- **Contraste (calculado no navegador a partir dos tokens, WCAG):**
+  - **Mínimo claro:** 5.83:1 (`muted-foreground` sobre `muted`).
+  - **Mínimo escuro:** 6.51:1.
+  - **Demais pares medidos** (texto, tons semânticos, sidebar, marca-texto, botão primário): todos acima de 4.5:1.
+- **Console:** os 7 erros 401 registrados são as 7 requisições sem token do teste acima; não há erros de aplicação.
+- **Evidência dos gates (execução final):**
+  - `py_compile` OK;
+  - `pytest` **91 passed**;
+  - `core/pipeline.py` sem diff;
+  - `tsc --noEmit` exit 0;
+  - `npm run lint` **0 problemas**;
+  - `npm run build` OK, 9 páginas geradas.
+- **Riscos e pendências:**
+  - **Login real do Supabase não exercitado:** a QA usou uma sessão simulada no navegador de teste, sem credenciais reais.
+  - **Impressão do glossário:** a rota `/glossario/print` dispara `window.print()`, então não foi aberta no teste. Ela só ganhou o parser novo e a chave de cache.
+  - **Token na URL de mídia:** o token continua indo na query de `/media`, porque `<audio>`/`<video>` não enviam `Authorization`. É o desenho antigo, registrado no ADR.

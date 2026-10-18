@@ -1,20 +1,19 @@
 /**
- * Parser e helpers do glossário. Fonte de verdade: o markdown gerado
- * pelo pipeline (`glossario_local.md` ou `glossario_nicho.md`).
+ * Parser e helpers do glossário. Fonte de verdade: o markdown gerado pelo
+ * pipeline (`glossario_local.md`).
  *
- * Formato esperado de cada termo:
+ * O prompt do glossário não fixa um formato, e a saída do LLM varia. O parser
+ * aceita as variações vistas nos dados reais:
  *
- *   ## Termo
- *   **Definição:** ...
- *   **Exemplo:** "..."
- *   **Termos relacionados:** termo1, termo2
+ *   ## Termo                         ### **Termo**                ## 1. Termo
+ *   **Definição:** texto             *   **Definição:** texto     **Definição:**
+ *   **Exemplo:** "texto"             *   **Exemplo de Uso:** …    texto na linha seguinte
+ *   **Termos relacionados:** a, b    *   **Termos Relacionados:** a, b
  *
- * Aceita também os equivalentes em inglês (Definition / Example / Related)
- * caso o LLM responda noutro idioma.
- *
- * Anteriormente vivia inline em `GlossaryPanel.tsx`. Foi extraído pra ser
- * reutilizado pela GlossaryGrid (página dedicada) e pelo PrintLayout, sem
- * duplicar lógica.
+ * Títulos de nível 2 a 4 abrem um termo. Um bloco só vira termo se tiver
+ * definição ou exemplo — por isso a introdução ("Termos relevantes do nicho…")
+ * é ignorada sem lista de exceções. Rótulos também em inglês (Definition /
+ * Example / Related).
  */
 
 export type GlossaryTerm = {
@@ -24,51 +23,79 @@ export type GlossaryTerm = {
   related: string[];
 };
 
-const HEADER_BLACKLIST = ["glossário", "glossario", "termos", "glossary"];
+type Field = "definition" | "example" | "related";
+
+const HEADING_RE = /^#{2,4}\s+(.+?)\s*$/;
+
+// [marcadores de lista/citação] **Rótulo** [:] valor — o ":" pode estar dentro ou fora do negrito.
+const FIELD_RE =
+  /^[\s>*\-•]*\**\s*(defini[çc][aã]o|definition|exemplo(?:\s+(?:de\s+uso|na\s+entrevista))?|example|termos?\s+relacionados?|related(?:\s+terms)?)\s*:?\s*\**\s*:?\s*\**\s*(.*)$/i;
+
+function fieldOf(label: string): Field {
+  const l = label.toLowerCase();
+  if (l.startsWith("defin")) return "definition";
+  if (l.startsWith("exemplo") || l.startsWith("example")) return "example";
+  return "related";
+}
+
+/** "**1. Nome:**" → "Nome". */
+function cleanTitle(raw: string): string {
+  return raw
+    .replace(/[*_`]/g, "")
+    .replace(/^\d+[.)]\s*/, "")
+    .replace(/:\s*$/, "")
+    .trim();
+}
+
+/** Tira marcadores de citação/ênfase nas pontas e aspas que envolvem o texto todo. */
+function cleanText(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^[>\s*_]+|[*_\s]+$/g, "")
+    .replace(/^["“]+|["”]+$/g, "")
+    .trim();
+}
 
 export function parseGlossaryMarkdown(md: string): GlossaryTerm[] {
   if (!md) return [];
+
+  type Draft = { term: string; text: Record<Field, string[]> };
+  const drafts: Draft[] = [];
+  let current: Draft | null = null;
+  let field: Field | null = null;
+
+  for (const line of md.split(/\r?\n/)) {
+    const heading = HEADING_RE.exec(line);
+    if (heading) {
+      current = { term: cleanTitle(heading[1]), text: { definition: [], example: [], related: [] } };
+      drafts.push(current);
+      field = null;
+      continue;
+    }
+    if (!current) continue;
+
+    const match = FIELD_RE.exec(line);
+    if (match) {
+      field = fieldOf(match[1]);
+      if (match[2].trim()) current.text[field].push(match[2]);
+    } else if (line.trim() === "" || /^-{3,}$/.test(line.trim())) {
+      field = null; // linha em branco ou "---" encerra o campo corrente
+    } else if (field) {
+      current.text[field].push(line); // continuação de um valor que ocupa várias linhas
+    }
+  }
+
   const terms: GlossaryTerm[] = [];
-  const blocks = md.split(/^## /m).filter(Boolean);
-
-  for (const block of blocks) {
-    const lines = block.trim().split("\n");
-    const term = lines[0].replace(/^#+\s*/, "").trim();
-    if (!term) continue;
-    const lower = term.toLowerCase();
-    if (HEADER_BLACKLIST.some((h) => lower.includes(h))) continue;
-
-    let definition = "";
-    let example = "";
-    let related: string[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-
-      if (line.startsWith("**Definição:**") || line.startsWith("**Definition:**")) {
-        definition = line
-          .replace(/\*\*Defini[çc][aã]o:\*\*|\*\*Definition:\*\*/i, "")
-          .trim();
-      } else if (line.startsWith("**Exemplo:**") || line.startsWith("**Example:**")) {
-        example = line
-          .replace(/\*\*Exemplo:\*\*|\*\*Example:\*\*/i, "")
-          .replace(/["“”]/g, "")
-          .trim();
-      } else if (
-        line.startsWith("**Termos relacionados:**") ||
-        line.startsWith("**Related:**")
-      ) {
-        related = line
-          .replace(/\*\*Termos relacionados:\*\*|\*\*Related:\*\*/i, "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
-    }
-
-    if (term && (definition || example)) {
-      terms.push({ term, definition, example, related });
-    }
+  for (const { term, text } of drafts) {
+    const definition = cleanText(text.definition.join(" "));
+    const example = cleanText(text.example.join(" "));
+    if (!term || (!definition && !example)) continue;
+    const related = text.related
+      .join(" ")
+      .split(/[,;]/)
+      .map((s) => s.replace(/[*_]/g, "").replace(/\.$/, "").trim())
+      .filter(Boolean);
+    terms.push({ term, definition, example, related });
   }
 
   return terms.sort((a, b) => a.term.localeCompare(b.term, "pt-BR"));

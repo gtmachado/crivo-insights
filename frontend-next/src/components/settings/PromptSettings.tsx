@@ -83,12 +83,11 @@ export function PromptSettings() {
         Alterações valem para os próximos processamentos. Entrevistas já processadas não são reprocessadas automaticamente.
       </p>
 
-      <div role="tablist" aria-label="Prompts" className="flex flex-wrap gap-1.5">
+      <div role="group" aria-label="Prompts" className="flex flex-wrap gap-1.5">
         {prompts.map((p) => (
           <Button
             key={p.name}
-            role="tab"
-            aria-selected={p.name === name}
+            aria-pressed={p.name === name}
             variant={p.name === name ? "secondary" : "ghost"}
             size="sm"
             onClick={() => setSelected(p.name)}
