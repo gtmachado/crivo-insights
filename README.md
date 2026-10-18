@@ -111,8 +111,10 @@ backend/
 ## Testes e validação
 
 ```bash
-python -m pytest                      # backend
+python -m pytest                      # backend (pip install -r requirements-test.txt basta; sem torch/whisper)
 cd frontend-next && npm run lint && npx tsc --noEmit && npm run build
 ```
+
+O CI (`.github/workflows/ci.yml`) roda esses mesmos comandos em todo PR e em `push` na `main`.
 
 Veja `docs/refactor/LOG.md` para o histórico da refatoração e do facelift "Caderno de Campo".

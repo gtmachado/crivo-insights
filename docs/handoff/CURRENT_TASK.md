@@ -14,6 +14,7 @@
 | **Branch** | `refactor/facelift` (PR aberto para `main`) |
 | **Tag de rollback** | `pre-facelift` (`a247fca`) |
 | **Registro** | `docs/refactor/LOG.md` — o quê / por quê / arquivos / evidência dos gates / riscos, por etapa |
+| **CI** | `.github/workflows/ci.yml` (branch `ci/github-actions`): pytest + lint + tsc + build em todo PR |
 | **Gates na entrega** | pytest 91 passed · lint 0 problemas · tsc 0 erros · build OK (9 páginas) |
 
 ---
@@ -25,7 +26,7 @@ Não há tarefa ativa. Candidatas (backlog em `docs/gsd/02_backlog.md`):
 - **BL-001/002** — histórico de análises de nicho e exportar a análise em PDF
 - **BL-003** — busca global (Ctrl/Cmd+K)
 - **BL-007** — multiusuário (o `interviewer_user_id` já está reservado)
-- Trocar o SDK deprecado do Gemini (`google-generativeai`) e adicionar CI (GitHub Actions) com os gates acima
+- Trocar o SDK deprecado do Gemini (`google-generativeai`)
 - Fixar o formato de saída do prompt do glossário (hoje o parser tolera os 3 formatos que o LLM produz)
 
 ## Pendências conhecidas da entrega

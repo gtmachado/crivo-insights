@@ -360,3 +360,23 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
 - **Riscos e pendências:**
   - **Docs históricos:** `docs/sdd/*` e `docs/decisions/ADR-001-arquitetura-base.md` não foram reescritos e citam coisas removidas (ex.: consolidação, AmbientBackground). São registros de decisão da época.
   - **Merge:** o PR é de `refactor/facelift` para `main`; a branch `docs/sync-gsd-007-008` (base deste trabalho, ainda sem PR) entra junto.
+
+---
+
+## Pós-E8 — CI no GitHub Actions
+
+- **O quê:** `.github/workflows/ci.yml` roda os gates do `CLAUDE.md` (seção 6) em `pull_request` e em `push` na `main`.
+  - **`backend`:** Python 3.11, `compileall` em `backend/` e `pytest`.
+    - Instala só `requirements-test.txt` (novo): fastapi, python-multipart, pydantic-settings, httpx e pytest, nas versões de `requirements.txt`.
+    - Sem torch, whisper nem SDKs de LLM: o código os importa dentro das funções e os testes substituem as chamadas externas.
+  - **`frontend`:** Node 20, `npm ci`, `npm run lint`, `npx tsc --noEmit` e `npm run build`. Usa variáveis `NEXT_PUBLIC_*` fictícias, porque o cliente Supabase exige URL e chave ao carregar.
+  - **Execução:** cache de pip e npm, `permissions: contents: read`, `concurrency` cancelando execuções antigas da mesma ref e timeouts de 10 e 15 min. Nenhum job chama provedor de LLM, então não gasta crédito.
+- **Por quê:** até aqui os gates só rodavam na máquina de quem mexia; o PR #8 mostrou que eles pegam regressões reais.
+- **Evidência (executada localmente, simulando o ambiente do CI):**
+  - **Backend:** venv limpo só com `requirements-test.txt` (**fastapi 0.115.0**, starlette 0.38.6), `compileall` OK e **91 passed**. Isso também validou os testes na versão que o `requirements.txt` pede; o ambiente de desenvolvimento local roda fastapi 0.110.
+  - **Frontend:** `npm ci --dry-run` OK (lockfile em sincronia) e `npm run build` OK com as variáveis fictícias.
+  - **Workflow:** YAML válido (jobs `backend` e `frontend`). O primeiro run real acontece no PR que adiciona o arquivo.
+- **Riscos e pendências:**
+  - **Primeira execução na nuvem:** só o GitHub confirma o run completo (por exemplo, `ubuntu-latest` diferente do Windows local e distinção de maiúsculas em caminhos). Se algo falhar lá, o log do PR mostra e se corrige no mesmo PR.
+  - **Sincronia manual:** `requirements-test.txt` repete versões de `requirements.txt`; se uma delas mudar, a outra precisa acompanhar (há comentário no arquivo).
+  - **Fora do escopo:** o deploy do frontend continua na Vercel; o CI não o substitui.

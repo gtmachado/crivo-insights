@@ -1,0 +1,9 @@
+# Dependências mínimas para rodar `pytest` (usadas pelo CI).
+# Não inclui torch/whisper nem os SDKs de LLM: o código os importa de forma
+# preguiçosa (dentro das funções) e os testes substituem as chamadas externas.
+# As versões espelham `requirements.txt`; mantenha as duas em sincronia.
+fastapi==0.115.0
+python-multipart==0.0.9
+pydantic-settings==2.5.2
+httpx==0.27.2
+pytest>=8.0
