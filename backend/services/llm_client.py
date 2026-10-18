@@ -36,9 +36,7 @@ _OPENROUTER_DEFAULTS: dict[str, str] = {
     # Para reduzir custo, sobrescreva via .env: model_refine, model_glossary, etc.
     "refine":               "anthropic/claude-sonnet-4.6",
     "glossary":             "anthropic/claude-sonnet-4.6",
-    "consolidate_glossary": "anthropic/claude-sonnet-4.6",
     "structure":            "anthropic/claude-sonnet-4.6",
-    "consolidate":          "anthropic/claude-sonnet-4.6",
 }
 
 # Modelos que NÃO suportam system prompt separado (ex: Gemma via Google AI Studio)
@@ -57,16 +55,12 @@ _GEMINI_DEFAULTS: dict[str, str] = {
     "refine":               "gemini-2.0-flash",
     "glossary":             "gemini-2.0-flash",
     "structure":            "gemini-2.0-flash",
-    "consolidate":          "gemini-2.0-flash",
-    "consolidate_glossary": "gemini-2.0-flash",
 }
 
 _ANTHROPIC_DEFAULTS: dict[str, str] = {
     "refine":               "claude-sonnet-4-6",
     "glossary":             "claude-sonnet-4-6",
     "structure":            "claude-sonnet-4-6",
-    "consolidate":          "claude-sonnet-4-6",
-    "consolidate_glossary": "claude-sonnet-4-6",
 }
 
 _MAX_TOKENS = 8192
@@ -233,7 +227,7 @@ def call(
     Chama o LLM configurado para a tarefa e retorna o texto gerado.
 
     Parâmetros:
-        task          — "refine" | "structure" | "glossary" | "consolidate" | "consolidate_glossary"
+        task          — "refine" | "structure" | "glossary"
         system_prompt — prompt de sistema (carregado do arquivo .md pelo service)
         user_content  — conteúdo do usuário (transcrição, docs etc.)
         metadata      — dict opcional para logging (ex: {"interview": "João Silva"})

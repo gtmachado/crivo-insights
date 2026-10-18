@@ -1,32 +1,36 @@
+import logging
+import re
 import shutil
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from backend.core.config import settings
 from backend.core.pipeline import run_pipeline
+from backend.services.converter import SUPPORTED_INPUT
+from backend.services.jobs import JobDict, JobStore
 from backend.services.llm_client import _resolve_model
 from backend.storage.filesystem import (
-    list_interviews,
+    delete_interview_dir,
     interview_dir,
     interview_path,
     list_interview_files,
-    delete_interview_dir,
+    list_interviews,
     read_markdown,
-    save_markdown,
     read_meta,
+    save_markdown,
     write_meta,
 )
-from backend.core.config import settings
+
+log = logging.getLogger("interviews")
 
 router = APIRouter(prefix="/interviews", tags=["interviews"])
 
-_executor = ThreadPoolExecutor(max_workers=2)
-_jobs: dict[str, dict] = {}  # job_id → {status, log, paths}
+jobs = JobStore()
 
 # Mapa de doc lógico → (subdir, nome do arquivo no disco)
 _DOC_MAP = {
@@ -36,9 +40,9 @@ _DOC_MAP = {
     "glossary":   ("glossary", "glossario_local.md"),
 }
 
-# Docs editáveis via PUT. O glossário local também é editável; uma nova rodada
-# do pipeline sobrescreve o arquivo — o usuário está ciente disso.
-_EDITABLE_DOCS = {"raw", "refined", "structured", "glossary"}
+# Todos os docs são editáveis via PUT. Uma nova rodada do pipeline sobrescreve
+# o arquivo — o usuário está ciente disso.
+_EDITABLE_DOCS = set(_DOC_MAP)
 
 
 class DocUpdate(BaseModel):
@@ -50,8 +54,8 @@ class InterviewMetaUpdate(BaseModel):
     """
     Body do PUT /interviews/{niche}/{interview}/meta.
 
-    Todos os campos são opcionais — um PUT parcial preserva os campos não enviados
-    porque o endpoint faz merge com o meta existente.
+    Um PUT parcial preserva os campos não enviados: o endpoint só aplica sobre
+    o meta existente os campos presentes no body (`exclude_unset`).
 
     FUTURO (BL-007 / Supabase Auth): quando autenticação for implementada,
     interviewer_user_id será populado pelo backend a partir do JWT, e
@@ -103,13 +107,11 @@ def _model_for_stage(stage_id: str) -> str | None:
     """Devolve o modelo configurado pra stage. Stages sem LLM retornam None."""
     if stage_id == "transcribe":
         return f"whisper-{settings.whisper_model}"
-    task_map = {"refine": "refine", "structure": "structure", "glossary": "glossary"}
-    task = task_map.get(stage_id)
-    if not task:
+    if stage_id not in ("refine", "structure", "glossary"):
         return None
     try:
-        return _resolve_model(task)
-    except Exception:
+        return _resolve_model(stage_id)
+    except Exception:  # noqa: BLE001 — modelo é informativo, não pode quebrar o job
         return None
 
 
@@ -130,100 +132,104 @@ def _initial_stages() -> list[dict]:
     ]
 
 
-def _run_job(job_id: str, input_file: Path, niche: str, name: str):
-    log: list[str] = []
-    stages = _initial_stages()
+def _apply_step(job: JobDict, state: dict, msg: str) -> None:
+    """Aplica uma mensagem de `on_step` ao estado do job (stages, logs, tempos)."""
+    stages = job["stages"]
+    job["log"].append(msg)
 
-    _jobs[job_id] = {
-        "status":     "running",
-        "log":        log,
-        "stages":     stages,
-        "paths":      {},
-        "niche":      niche,
-        "interview":  name,
-        "started_at": time.time(),
-        "ended_at":   None,
-    }
+    new_id = _classify_stage(msg)
+    now = time.time()
 
-    # Estado mutável compartilhado entre on_step e o controle externo.
-    # Usar dict ao invés de int permite mutação simples sem nonlocal.
+    if not new_id:
+        # Mensagem informativa — anexa à stage corrente.
+        cur_idx = state["current_idx"]
+        if cur_idx >= 0:
+            stages[cur_idx]["logs"].append(msg)
+        return
+
+    new_idx = next((i for i, s in enumerate(stages) if s["id"] == new_id), -1)
+    if new_idx == -1:
+        return
+
+    # Fecha a stage atual (se diferente) como done.
+    cur_idx = state["current_idx"]
+    if cur_idx >= 0 and cur_idx != new_idx and stages[cur_idx]["status"] == "processing":
+        stages[cur_idx]["status"] = "done"
+        stages[cur_idx]["ended_at"] = now
+
+    # Caso pulou stages intermediárias (não esperado, defensivo).
+    for i in range(new_idx):
+        if stages[i]["status"] == "pending":
+            stages[i]["status"]     = "done"
+            stages[i]["started_at"] = stages[i]["started_at"] or now
+            stages[i]["ended_at"]   = stages[i]["ended_at"]   or now
+
+    stages[new_idx]["status"]     = "processing"
+    stages[new_idx]["started_at"] = stages[new_idx]["started_at"] or now
+    stages[new_idx]["logs"].append(msg)
+    state["current_idx"] = new_idx
+
+
+def _finish_ok(job: JobDict, paths: dict[str, Path]) -> None:
+    end = time.time()
+    for s in job["stages"]:
+        if s["status"] == "processing":
+            s["status"]   = "done"
+            s["ended_at"] = end
+    job["paths"]  = {k: str(v) for k, v in paths.items()}
+    job["status"] = "done"
+
+
+def _finish_error(job: JobDict, state: dict, error: Exception) -> None:
+    cur_idx = state["current_idx"]
+    if cur_idx >= 0:
+        job["stages"][cur_idx]["status"]   = "error"
+        job["stages"][cur_idx]["error"]    = str(error)
+        job["stages"][cur_idx]["ended_at"] = time.time()
+    job["status"] = "error"
+    job["log"].append(f"ERRO: {error}")
+
+
+def _tmp_root() -> Path:
+    return Path(settings.data_dir) / "_tmp"
+
+
+def _cleanup_tmp(input_file: Path) -> None:
+    """Remove a pasta temporária do upload (apenas se estiver sob data/_tmp)."""
+    folder = input_file.parent
+    if folder != _tmp_root() and folder.is_relative_to(_tmp_root()):
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def _run_job(job_id: str, input_file: Path, niche: str, name: str) -> None:
     state = {"current_idx": -1}
 
-    def stage_idx(stage_id: str) -> int:
-        for i, s in enumerate(stages):
-            if s["id"] == stage_id:
-                return i
-        return -1
-
-    def on_step(msg: str):
-        log.append(msg)
-        print(f"[{job_id}] {msg}")
-
-        new_id = _classify_stage(msg)
-        now = time.time()
-
-        if new_id:
-            new_idx = stage_idx(new_id)
-            if new_idx == -1:
-                return
-
-            # Fecha a stage atual (se diferente) como done.
-            cur_idx = state["current_idx"]
-            if cur_idx >= 0 and cur_idx != new_idx and stages[cur_idx]["status"] == "processing":
-                stages[cur_idx]["status"] = "done"
-                stages[cur_idx]["ended_at"] = now
-
-            # Caso pulou stages intermediárias (não esperado, defensivo).
-            for i in range(new_idx):
-                if stages[i]["status"] == "pending":
-                    stages[i]["status"]     = "done"
-                    stages[i]["started_at"] = stages[i]["started_at"] or now
-                    stages[i]["ended_at"]   = stages[i]["ended_at"]   or now
-
-            stages[new_idx]["status"]     = "processing"
-            stages[new_idx]["started_at"] = stages[new_idx]["started_at"] or now
-            stages[new_idx]["logs"].append(msg)
-            state["current_idx"] = new_idx
-        else:
-            # Mensagem informativa — anexa à stage corrente.
-            cur_idx = state["current_idx"]
-            if cur_idx >= 0:
-                stages[cur_idx]["logs"].append(msg)
+    def on_step(msg: str) -> None:
+        log.info("[%s] %s", job_id, msg)
+        jobs.mutate(job_id, lambda job: _apply_step(job, state, msg))
 
     try:
         paths = run_pipeline(input_file, niche, name, on_step=on_step)
-
-        # Pipeline OK: fecha qualquer stage ainda em processing.
-        end = time.time()
-        for s in stages:
-            if s["status"] == "processing":
-                s["status"]   = "done"
-                s["ended_at"] = end
-
-        _jobs[job_id]["paths"]  = {k: str(v) for k, v in paths.items()}
-        _jobs[job_id]["status"] = "done"
-
-    except Exception as e:
-        # Marca a stage atual como error e anexa mensagem.
-        cur_idx = state["current_idx"]
-        if cur_idx >= 0:
-            stages[cur_idx]["status"]   = "error"
-            stages[cur_idx]["error"]    = str(e)
-            stages[cur_idx]["ended_at"] = time.time()
-        _jobs[job_id]["status"] = "error"
-        log.append(f"ERRO: {e}")
-
+        jobs.mutate(job_id, lambda job: _finish_ok(job, paths))
+    except Exception as e:  # noqa: BLE001 — o erro vai para o job
+        log.exception("[%s] pipeline falhou", job_id)
+        jobs.mutate(job_id, lambda job: _finish_error(job, state, e))
     finally:
-        _jobs[job_id]["ended_at"] = time.time()
-        # Remove tmp apenas se não foi copiado para raw/ ainda.
-        if input_file.exists() and "_tmp" in str(input_file):
-            input_file.unlink(missing_ok=True)
+        jobs.mutate(job_id, lambda job: job.update(ended_at=time.time()))
+        _cleanup_tmp(input_file)
 
 
 # ── Upload / job status ───────────────────────────────────────────────────────
 
+def _safe_upload_name(filename: str | None) -> str:
+    """Só o nome-base, sem caracteres problemáticos; preserva a extensão."""
+    name = Path((filename or "").replace("\\", "/")).name.strip()
+    name = re.sub(r"[^\w.\- ]", "_", name)
+    return name if name not in ("", ".", "..") else "upload"
+
+
 @router.post("/upload")
-async def upload_interview(
+def upload_interview(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     niche: str = Form(...),
@@ -241,23 +247,32 @@ async def upload_interview(
     meta_interviewer_user_id: str = Form(default=""),
     meta_notes: str = Form(default=""),
 ):
-    tmp_dir = Path(settings.data_dir) / "_tmp"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    tmp_file = tmp_dir / file.filename
+    # Endpoint síncrono de propósito: o FastAPI o executa em threadpool, então
+    # a cópia do upload (bloqueante) não trava o event loop.
+    safe_name = _safe_upload_name(file.filename)
+    if Path(safe_name).suffix.lower() not in SUPPORTED_INPUT:
+        raise HTTPException(
+            400,
+            f"Formato não suportado: '{Path(safe_name).suffix}'. "
+            f"Suportados: {', '.join(sorted(SUPPORTED_INPUT))}",
+        )
 
+    # Pasta única por upload: dois envios com o mesmo nome não colidem.
+    tmp_dir = _tmp_root() / uuid.uuid4().hex
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_file = tmp_dir / safe_name
     with tmp_file.open("wb") as f:
         shutil.copyfileobj(file.file, f)
 
     # Cria o diretório da entrevista com todas as subpastas e salva metadata
     # ANTES de iniciar o pipeline. Assim o metadata.json existe mesmo se o
-    # pipeline falhar, e o job_id não é necessário para ler os metadados.
+    # pipeline falhar.
     base = interview_dir(niche, interview_name)
-    interview_slug = base.name  # interview_dir já slugifica o nome
 
-    meta: dict = {
+    write_meta(niche, interview_name, {
         "title": meta_title or interview_name,
         "niche": niche,
-        "interview_slug": interview_slug,
+        "interview_slug": base.name,  # interview_dir já slugifica o nome
         "interviewee_name": meta_interviewee_name,
         "interviewee_phone": meta_interviewee_phone,
         "interviewee_email": meta_interviewee_email,
@@ -265,11 +280,20 @@ async def upload_interview(
         "interviewer_user_id": meta_interviewer_user_id,
         "notes": meta_notes,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "source_filename": file.filename or "",
-    }
-    write_meta(niche, interview_name, meta)
+        "source_filename": safe_name,
+    })
 
-    job_id = str(uuid.uuid4())[:8]
+    # O job existe antes de a task começar: um GET de status logo após o POST
+    # nunca recebe 404.
+    job_id = jobs.create(
+        log=[],
+        stages=_initial_stages(),
+        paths={},
+        niche=niche,
+        interview=interview_name,
+        started_at=time.time(),
+        ended_at=None,
+    )
     background_tasks.add_task(_run_job, job_id, tmp_file, niche, interview_name)
 
     return {"job_id": job_id, "message": "Pipeline iniciado."}
@@ -277,10 +301,15 @@ async def upload_interview(
 
 @router.get("/status/{job_id}")
 def job_status(job_id: str):
-    job = _jobs.get(job_id)
-    if not job:
+    job = jobs.get(job_id)
+    if job is None:
         raise HTTPException(404, "Job não encontrado.")
     return job
+
+
+def jobs_snapshot() -> list[tuple[str, JobDict]]:
+    """Cópia de todos os jobs de entrevista (usado pelo dashboard)."""
+    return jobs.items()
 
 
 # ── Listagem por nicho ────────────────────────────────────────────────────────
@@ -290,9 +319,9 @@ def get_interviews(niche: str):
     return list_interviews(niche)
 
 
-# ── Listagem de arquivos da entrevista (FileExplorer) ─────────────────────────
+# ── Listagem de arquivos / metadata ───────────────────────────────────────────
 # IMPORTANTE: declarar ANTES de "/{niche}/{interview}/{doc}" para evitar que
-# "files" seja interpretado como um {doc}.
+# "files" e "meta" sejam interpretados como um {doc}.
 
 @router.get("/{niche}/{interview}/files")
 def get_interview_files(niche: str, interview: str):
@@ -302,10 +331,6 @@ def get_interview_files(niche: str, interview: str):
     except FileNotFoundError as e:
         raise HTTPException(404, str(e))
 
-
-# ── Metadata da entrevista ────────────────────────────────────────────────────
-# IMPORTANTE: declarar ANTES de "/{niche}/{interview}/{doc}" para evitar que
-# "meta" seja interpretado como um {doc} pelo roteador do FastAPI.
 
 @router.get("/{niche}/{interview}/meta")
 def get_interview_meta(niche: str, interview: str):
@@ -320,63 +345,46 @@ def get_interview_meta(niche: str, interview: str):
 @router.put("/{niche}/{interview}/meta")
 def update_interview_meta(niche: str, interview: str, body: InterviewMetaUpdate):
     """
-    Salva (merge) os campos de metadata fornecidos no body.
-    Campos não enviados no body são preservados do meta existente.
-    Adiciona `updated_at` automaticamente.
+    Salva (merge) os campos de metadata enviados no body.
+    Campos não enviados são preservados. Adiciona `updated_at` automaticamente.
     """
-    base = interview_path(niche, interview)
-    if not base.exists():
+    if not interview_path(niche, interview).exists():
         raise HTTPException(404, f"Entrevista '{interview}' não encontrada.")
-    existing = read_meta(niche, interview)
     updated = {
-        **existing,
-        **body.model_dump(exclude_unset=False),
+        **read_meta(niche, interview),
+        **body.model_dump(exclude_unset=True),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     write_meta(niche, interview, updated)
     return {"ok": True}
 
 
-# ── Leitura de documento ──────────────────────────────────────────────────────
+# ── Documentos ────────────────────────────────────────────────────────────────
 
 @router.get("/{niche}/{interview}/{doc}")
 def get_document(niche: str, interview: str, doc: str):
     if doc not in _DOC_MAP:
         raise HTTPException(400, f"doc deve ser um de: {list(_DOC_MAP)}")
     subdir, filename = _DOC_MAP[doc]
-    base = interview_path(niche, interview)
-    path = base / subdir / filename
+    path = interview_path(niche, interview) / subdir / filename
     if not path.exists():
         raise HTTPException(404, "Documento ainda não gerado.")
     return {"content": read_markdown(path)}
 
 
-# ── Edição de documento ───────────────────────────────────────────────────────
-
 @router.put("/{niche}/{interview}/{doc}")
 def update_document(niche: str, interview: str, doc: str, body: DocUpdate):
-    """
-    Salva o conteúdo do markdown editado direto no filesystem.
-    Apenas os 3 docs de transcrição (raw, refined, structured) são editáveis.
-    """
+    """Salva o conteúdo do markdown editado direto no filesystem."""
     if doc not in _EDITABLE_DOCS:
-        raise HTTPException(
-            400,
-            f"Só é permitido editar: {sorted(_EDITABLE_DOCS)}. "
-            f"O glossário é regenerado pelo pipeline.",
-        )
-    subdir, filename = _DOC_MAP[doc]
+        raise HTTPException(400, f"Só é permitido editar: {sorted(_EDITABLE_DOCS)}.")
     base = interview_path(niche, interview)
     if not base.exists():
         raise HTTPException(404, f"Entrevista '{interview}' não encontrada.")
-    target_dir = base / subdir
-    target_dir.mkdir(parents=True, exist_ok=True)
-    path = target_dir / filename
+    subdir, filename = _DOC_MAP[doc]
+    path = base / subdir / filename
     save_markdown(path, body.content)
     return {"ok": True, "path": str(path), "size": len(body.content)}
 
-
-# ── Exclusão de entrevista ────────────────────────────────────────────────────
 
 @router.delete("/{niche}/{interview}")
 def delete_interview(niche: str, interview: str):

@@ -36,3 +36,57 @@ Formato de cada entrada: **O quê / Por quê / Arquivos / Evidência dos gates /
   - **`npm run lint`:** **17 problemas (15 erros, 2 warnings) já existentes**, por exemplo `react-hooks/set-state-in-effect` em `ui/dialog.tsx:36`. Até a E6 o lint precisa terminar com 0 erros; nas etapas anteriores o critério é não aumentar a contagem.
   - **`npm run build`:** OK, 12 rotas.
 - **Riscos e pendências:** o ambiente local tem versões diferentes das de `requirements.txt` (ver baseline).
+
+---
+
+## E1 — Backend: legado, segurança, bugs e testes
+
+- **O quê:**
+  - **Legado removido:**
+    - endpoints de consolidação (`consolidate/*`, `/niches/{n}/insights`, `/niches/{n}/glossary`);
+    - `services/consolidator.py` e os prompts `consolidate*.md`;
+    - o frontend Streamlit (`frontend/`, `run_frontend.*`);
+    - o `test_pipeline.py` quebrado;
+    - as tasks `consolidate*` em config, `llm_client` e `.env.example`;
+    - `streamlit`, `ffmpeg-python`, `aiofiles`, `python-dotenv` e `httpx` saíram de `requirements.txt`.
+  - **Segurança:**
+    - `verify_token` vive em `api/auth.py` e usa `hmac.compare_digest`;
+    - aplicado como dependência do router em **todas** as rotas, exceto `/health`; antes só o `/media` era protegido;
+    - `/media` valida o caminho com `resolve()` + `is_relative_to` (path traversal);
+    - suffix range (`bytes=-N`) corrigido e `416` com `Content-Range: bytes */N`;
+    - upload sanitiza o nome, rejeita extensão não suportada **antes** de criar a entrevista e usa uma pasta tmp única por envio, limpa no fim;
+    - o upload é `def`, não `async def`, então a cópia bloqueante deixa de travar o event loop.
+  - **Bugs:**
+    - `PUT /meta` agora aplica só os campos enviados (`exclude_unset=True`); antes um PUT parcial zerava os outros campos;
+    - o job nasce **antes** da task (`JobStore.create`), então não há mais 404 no primeiro poll de status;
+    - `GET /niches/{n}/analysis` não cria mais `_insights/` em nichos inexistentes, que poluíam `list_niches`;
+    - o filtro de pastas privadas é o mesmo em todas as listagens;
+    - o glossário é editável de forma coerente em docstring e mensagem.
+  - **Novo:**
+    - `services/jobs.py` com `JobStore` thread-safe: `mutate` sob lock, `get` devolve cópia e há limite de jobs finalizados. Isso adianta parte da E2;
+    - `/media` virou `routes/media.py`;
+    - `AnalyzeNicheRequest` usa `min_length=1`, então lista vazia devolve 422 no lugar do 400 antigo.
+  - **Testes:** 72 testes em `backend/tests/`, todos com `data_dir` e prompts em diretórios temporários.
+    - **Cobertura:**
+      - auth (inclui `/media` e `/health`);
+      - parse e serviço de Range;
+      - path traversal;
+      - ciclo de upload e job (sucesso e erro);
+      - merge parcial do meta;
+      - documentos;
+      - listagens;
+      - análise de nicho;
+      - config de modelos e prompts;
+      - contrato `_classify_stage` com as mensagens reais do `pipeline.py`.
+    - **Configuração:** `pytest.ini` usa `--basetemp=.pytest_tmp` (o tmp padrão do pytest não é gravável no ambiente do agente); `requirements-dev.txt`.
+- **Por quê:** fechar as brechas de segurança e os bugs de dados antes de reorganizar o código, com testes que travam o comportamento.
+- **Arquivos:** `backend/api/{main,auth}.py`, `backend/api/routes/{interviews,niches,config,media}.py`, `backend/services/{jobs,llm_client,niche_analyzer}.py`, `backend/storage/filesystem.py`, `backend/core/config.py`, `requirements*.txt`, `pytest.ini`, `.env.example`, `backend/tests/*`.
+- **Evidência dos gates:**
+  - `py_compile` de todo o backend: OK;
+  - `pytest`: **72 passed** (ambiente local fastapi 0.110.0 / starlette 0.36.3);
+  - `backend/core/pipeline.py` **não** foi modificado (`git status`).
+- **Riscos e pendências:**
+  - **Frontend quebrado de propósito entre E1 e E3:** `api.ts` e a página do nicho ainda chamam os endpoints de consolidação removidos; a E3 limpa isso.
+  - **Nichos antigos:** arquivos consolidados antigos em `data/niches/*/_insights` e `_glossary` ficam intactos no disco (nenhum dado foi tocado). A análise de nicho continua gravando em `_insights/analise_{slug}.md`.
+  - **Sem proteção em dev:** com `API_SECRET_KEY` vazio a API continua sem proteção; isso é intencional para dev local.
+  - **Pendências para a E2:** `llm_client` (provider e retry) e `prompt_store`.

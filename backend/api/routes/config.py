@@ -18,7 +18,6 @@ PROMPT_FILES: dict[str, str] = {
     "refine":               "refine_prompt.md",
     "structure":            "structure_prompt.md",
     "glossary":             "glossary_prompt.md",
-    "consolidate_glossary": "consolidate_glossary_prompt.md",
     "niche_analysis":       "niche_analysis.md",
 }
 
@@ -26,7 +25,6 @@ PROMPT_LABELS: dict[str, str] = {
     "refine":               "Refinamento",
     "structure":            "Estruturação",
     "glossary":             "Glossário",
-    "consolidate_glossary": "Consolidação de Glossário",
     "niche_analysis":       "Análise de Nicho",
 }
 
@@ -56,7 +54,7 @@ class PromptUpdate(BaseModel):
     content: str
 
 # Tarefas configuráveis via UI (niche_analysis é sempre fixo)
-CONFIGURABLE_TASKS = ["refine", "structure", "glossary", "consolidate", "consolidate_glossary"]
+CONFIGURABLE_TASKS = ["refine", "structure", "glossary"]
 
 # Modelos oferecidos no dropdown — sem Opus
 ALLOWED_MODELS = [
@@ -72,8 +70,6 @@ class ModelConfigUpdate(BaseModel):
     refine: str = ""
     structure: str = ""
     glossary: str = ""
-    consolidate: str = ""
-    consolidate_glossary: str = ""
 
 
 @router.get("/models")
@@ -86,7 +82,7 @@ def get_model_config():
     - fixed:          etapas não configuráveis (niche_analysis)
     """
     return {
-        "saved":          read_model_config(),
+        "saved":          {k: v for k, v in read_model_config().items() if k in CONFIGURABLE_TASKS},
         "effective":      {task: _resolve_model(task) for task in CONFIGURABLE_TASKS},
         "allowed_models": ALLOWED_MODELS,
         "fixed":          {"niche_analysis": "anthropic/claude-sonnet-4.6"},

@@ -1,7 +1,6 @@
 """
-Análise manual de nicho (Fase 4) — diferente da consolidação automática
-existente em `consolidator.py`. Aqui o usuário escolhe explicitamente
-quais entrevistas entram, e o modelo é fixo em Claude Sonnet 4.6.
+Análise manual de nicho: o usuário escolhe explicitamente quais entrevistas
+entram, e o modelo é fixo em Claude Sonnet 4.6.
 
 Modelo:
     - Primário: anthropic/claude-sonnet-4.6 via OpenRouter (BYOK)
@@ -9,7 +8,7 @@ Modelo:
 
 Saída: data/niches/{nicho}/_insights/analise_{slug}.md (sobrescreve).
 
-Não toca o pipeline principal nem a consolidação antiga.
+Não toca o pipeline principal.
 """
 from pathlib import Path
 
